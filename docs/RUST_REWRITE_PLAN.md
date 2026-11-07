@@ -18,7 +18,7 @@
 
 **推荐路径是渐进式四阶段，而不是一次性全量重写。** 理由：当前 49 条界面字符串背后，是 `wpa_cli` 控制协议、SSID printf 转义、`rc.conf` 注入防护、devd 事件链和 FreeBSD port 打包这一整条链路；一次性切换后任何回归都无法定位。每阶段保留可回退的旧二进制。
 
-**最大风险是 P0 级的三个**：sudo 下运行 GUI 与 D-Bus 的冲突、eframe 没有"无窗口常驻"的标准用法、以及本机（Fedora）无法验证 FreeBSD 目标构建。详见第 9 节。
+**最大风险是 P0 级的三个**：sudo 下运行 GUI 与 D-Bus 的冲突、eframe 没有"无窗口常驻"的标准用法、以及**验收环境的先天缺口**（VM 无 3D 加速、无真实无线网卡、无 sudo、GitHub 直连超时）。原先把"无法验证 FreeBSD 构建"列为 P0，现已因本机存在 FreeBSD 15 VM 而解除，改为在 guest 内原生构建；随之暴露的新缺口见第 13、14 节。
 
 ---
 
@@ -81,6 +81,21 @@
 | rfd（文件选择对话框） | 0.17.2（2026-10-22） | crates.io API |
 | image（PNG 解码） | 0.25.10（2026-03-10） | crates.io API |
 | arc-swap（可选，状态快照） | 1.9.3（2026-10-18） | crates.io API |
+| FreeBSD 15 `lang/rust` | latest `1.99.1_1`，quarterly `1.98.1`（均 ≥ tray-icon 的 MSRV 1.90） | FreshPorts，2026-11-07 |
+
+**本机 FreeBSD 15 测试环境（已查证，只读调查）：**
+
+| 项 | 事实 |
+|---|---|
+| 形态 | libvirt/KVM 系统域 `freebsd15`，**当前关机** |
+| 镜像 | `/var/lib/libvirt/images/FreeBSD-15.1-RELEASE-amd64-ufs.qcow2`，4 vCPU / 4 GiB / virtio 磁盘与网卡 |
+| 桌面 | VNC 图形 + `vmvga` 显卡，笔记记载装了 CDE + Xfce 双桌面与中文 locale；**无 3D 加速** |
+| 网络 | libvirt `default` NAT 动态 DHCP（历史地址 `192.168.122.170`，会变），**无 SSH 别名** |
+| guest 网络限制 | `pkg.freebsd.org` 可直连；**GitHub / raw.githubusercontent 直连超时**，需宿主代理的 `ssh -R 17890:127.0.0.1:7890` 反向隧道 |
+| guest 提权 | 笔记记载**未装 sudo**，root 密码登录被禁、需 `su -` |
+| 宿主机交叉编译 | rustup 只装了 linux / wasm / windows target，无 `x86_64-unknown-freebsd`，也没有 `cross` / `zig` → **不能交叉编译，必须在 guest 内原生构建** |
+| 另一台资源 | 实体机 `X200-BSD`（`192.168.8.77`，FreeBSD 15.1，仅 `keyboard-interactive` 登录）——可能是真实无线网卡样本来源 |
+| guest 内状态 | rust 是否已装、桌面当前是否可用、CJK 字体是否齐全，**VM 关机状态下无法确认**，需开机后核 |
 
 **平台支持（关键结论）：**
 
@@ -201,10 +216,12 @@ Python 的 `gettext` 是**纯 Python 解析 `.mo`**，不链接系统 `libintl`�
 ## 6. 分阶段实施（每阶段可独立验证与回退）
 
 **阶段 0 — 契约冻结（P0）**
-- 在 GhostBSD 实机采集真实样本：`ifconfig`、`wpa_cli status/list_networks/scan_results`、`netstat -rn`、`sysrc -n` 输出，特别是含引号与中文的 SSID。
-- 在 `sys.rs` 之上写契约测试：喂样本 → 断言解析结果。这类测试**在 Fedora 上就能跑**，是本机唯一可靠的自动化验证。
+- **先做两个 spike，不过关就不写业务代码**（见第 14 节）：① 最小 eframe/glow 窗口在 `vmvga` 软件渲染下能否起来；② 最小 tray-icon 图标能否出现在 Xfce 面板。
+- 在 `freebsd15` VM 内 `pkg install rust` 原生构建，配好 crate 获取通路（镜像或 vendor）。
+- 采集真实样本：`ifconfig`、`wpa_cli status/list_networks/scan_results`、`netstat -rn`、`sysrc -n`，特别是含引号与中文的 SSID。VM 无真实无线网卡，wpa 样本从 `X200-BSD` 实体机或一次性录制获取。
+- 在 `sys.rs` 之上写契约测试：喂样本 → 断言解析结果。这类测试**在 Fedora 上就能跑**。
 - 把 `validate.py` 的行为整理成对照表，逐条在 Rust 侧写等价测试（含全部拒绝用例）。
-- 验收：契约测试全绿；样本入库 `tests/fixtures/`。
+- 验收：两个 spike 通过；契约测试全绿；样本入库 `tests/fixtures/`。
 
 **阶段 1 — 逻辑层 Rust 化（P0，用户不可见）**
 - 移植 `validate` / `wpa` / `config` / `wifi` / `wg`，不接任何 GUI。
@@ -247,7 +264,7 @@ Python 的 `gettext` 是**纯 Python 解析 `.mo`**，不链接系统 `libintl`�
 | Python 依赖 | setuptools、PyGObject、GTK3 | 无 Python 运行依赖 |
 | 系统依赖 | `py311-gobject3`、`gtk3` 等 | `rust`、`glib`、`pkgconf`、`gtk3`（libappindicator 后端）；X11/OpenGL 运行库 |
 | 安装布局 | 见第 1.1 节 | **路径完全不变** |
-| 翻译生成 | `setup.py update_translations` | `xtr`/脚本提取 + `msgmerge`，`.pot`/`.po`/`.mo` 格式不变 |
+| 翻译生成 | `setup.py update_translations` | `tools/extract-i18n.py` 提取 `tr!()` + `msgmerge`（见 15.4），`.pot`/`.po`/`.mo` 格式不变 |
 | devd 脚本 | 3 个 Python | 阶段 4 起 1 个 Rust 二进制（配置文件里 action 路径随之改） |
 | 版本号 | 7.0 | 建议 8.0 起（外部契约文件已可平滑切换，但 port 需同步） |
 
@@ -261,8 +278,14 @@ Python 的 `gettext` 是**纯 Python 解析 `.mo`**，不链接系统 `libintl`�
 |---|---|---|---|
 | **P0** | `sudo networkmgr` 下 session D-Bus 不可用，`ksni` 托盘后端会失效 | desktop 文件为硬契约；ksni 走 D-Bus SNI | 默认用 `libappindicator`；在真实 sudo 会话里验证托盘出现 |
 | **P0** | eframe 没有"无窗口常驻"的标准用法 | `run_native` 面向可见窗口 | 采用双进程；窗口按需启动、关闭即退出 |
-| **P0** | 本机 Fedora 无法验证 FreeBSD 目标构建（缺 sysroot），GitHub Actions 也无原生 FreeBSD runner | 本机 `rustc 1.95.0` 为 linux target | CI 用 `vmactions/freebsd-vm` 或 Cirrus CI；阶段 0 就必须搭好，不能留到最后 |
 | **P0** | GTK3 依赖无法完全移除（libappindicator 后端） | tray-icon 0.26.1 `Cargo.toml` | 若"零 GTK"是硬目标，需同时改提权模型为普通用户运行 + 特权操作单独提权，属范围扩张，须先确认 |
+| ~~P0~~ **已解除** | 原「本机 Fedora 无法验证 FreeBSD 目标构建」 | 已查到本机有 libvirt 域 `freebsd15`（FreeBSD 15.1） | 改为 **guest 内原生构建**；宿主不做交叉编译（无 freebsd target / cross / zig）。FreeBSD 15 的 `lang/rust` 为 1.98–1.99，满足 MSRV |
+| **P0** | VM 用 `vmvga` 无 3D 加速，`glow`(OpenGL/GLX) 可能起不来 | XML 显卡为 `vmvga`，笔记记载曾因显卡驱动问题换过型号 | 阶段 0 的 spike ① 先跑最小 eframe 窗口；失败则评估 `wgpu`/软件渲染，或把 GUI 验收挪到实体机，不要把渲染问题误判成业务 bug |
+| **P0** | VM 无真实无线网卡，`wpa_cli` 全流程无法在 VM 内验收 | libvirt 域只有 virtio 以太网 | VM 只跑 mock 与逻辑测试；扫描/连接/EAP 的真实样本与验收放到 `X200-BSD` 或 GhostBSD 实机，明确写进第 13 节矩阵 |
+| **P0** | guest 访问 GitHub / raw.githubusercontent 超时，cargo 拉 crate 与 git 依赖会卡住 | 用户环境笔记 | VM 内 cargo 配 `rsproxy`（与宿主一致）或宿主 `cargo vendor` 后 scp 进 guest；阶段 4 的 port 用 vendored distfile |
+| **P1** | VM 未装 sudo，`Exec=sudo networkmgr` 这条硬契约在验收环境里跑不起来 | 用户环境笔记 | VM 内 `pkg install sudo` 并复刻 `sudoers.d/networkmgr`，**不改 desktop 文件**，保证验的就是原契约 |
+| **P1** | VM 是 FreeBSD 15.1 + Xfce/CDE，不是 GhostBSD；无 GhostBSD 的 port 集成、devd 配置与 MATE 面板 | 域镜像文件名与桌面记录 | 区分「VM 能验的」与「只能在 GhostBSD 验的」，见第 13 节；不要在 FreeBSD 15 上宣布 GhostBSD 兼容性已验收 |
+| **P1** | Xfce 面板是否接受 AppIndicator / StatusNotifierItem 未验证 | tray-icon 文档只保证 OS 层可用，不保证桌面面板实现 | spike ② 验证；若 Xfce 面板不显示，记录为环境限制，并评估 `ksni`（注意 sudo 下 D-Bus 的既有风险） |
 | **P1** | 中文/俄文界面字体缺失 | egui 默认字体不含 CJK | 开 `system_fonts` 或加载系统 CJK 字体，阶段 2 就在简中环境验证 |
 | **P1** | `gettext-rs` 引入 C 侧 `libintl` 依赖（feature 行为需实机核实） | Python gettext 是纯解析，不链接 libintl | 用纯 Rust `.mo` 读取器，保持零新增系统依赖 |
 | **P1** | eframe 默认 features 拉入 wgpu/wayland，在 BSD 上编译或运行失败 | eframe 0.37 `Cargo.toml` features | `default-features = false`，只开 `glow,x11,default_fonts,clipboard` |
@@ -275,27 +298,34 @@ Python 的 `gettext` 是**纯 Python 解析 `.mo`**，不链接系统 `libintl`�
 
 ## 10. 验收清单
 
-- [ ] 第 1.1 节所有路径逐项核对，旧安装可直接被新二进制接管
-- [ ] 第 1.3 节 9 项功能在 GhostBSD 实机逐项走通
-- [ ] 含 `"`、`\`、中文的 SSID：扫描、连接、保存、忘记全流程
-- [ ] 静态 IPv4 / IPv6（含 `em0.10` 这类带点接口名）写入 `rc.conf` 后重启仍生效
-- [ ] 7 语言 `.mo` 均能加载，简中界面无方块字
-- [ ] 拔网线 / 插网线 / 热插无线网卡触发 devd 三条链路
-- [ ] `wpa_supplicant.conf` 权限仍为 `0600 root:wheel`
-- [ ] 30 秒刷新不导致界面卡顿；托盘线程崩溃不静默
-- [ ] `cargo build --release` 在 FreeBSD CI runner 上通过
-- [ ] 回滚演练：把 desktop 的 `Exec` 改回 `networkmgr.py`，旧版可正常启动
+标记含义：**A** = 本机 Fedora 契约测试，**B** = `freebsd15` VM，**C** = 实体机 / GhostBSD（见第 13 节）。阶段 3 结束必须同时有 B 与 C 的记录。
+
+- [ ] **[A+B]** 第 1.1 节所有路径逐项核对，旧安装可直接被新二进制接管
+- [ ] **[C]** 第 1.3 节 9 项功能在 GhostBSD 实机逐项走通
+- [ ] **[A+C]** 含 `"`、`\`、中文的 SSID：扫描、连接、保存、忘记全流程
+- [ ] **[B+C]** 静态 IPv4 / IPv6（含 `em0.10` 这类带点接口名）写入 `rc.conf` 后重启仍生效
+- [ ] **[A+B]** 7 语言 `.mo` 均能加载，简中界面无方块字
+- [ ] **[B+C]** 拔网线 / 插网线 / 热插无线网卡触发 devd 三条链路
+- [ ] **[A+B]** `wpa_supplicant.conf` 权限仍为 `0600 root:wheel`
+- [ ] **[B+C]** 30 秒刷新不导致界面卡顿；托盘线程崩溃不静默
+- [ ] **[B]** `cargo build --release` 在 guest 内原生构建通过（若上线 CI，再验远端 FreeBSD runner）
+- [ ] **[B]** 两个 spike 通过：eframe/glow 起窗、tray-icon 图标出现在 Xfce 面板
+- [ ] **[B]** 回滚演练：把 desktop 的 `Exec` 改回 `networkmgr.py`，旧版可正常启动
 
 ---
 
 ## 11. 前置条件与未决问题
 
-**开始前必须拿到**：
-1. 一台 GhostBSD/FreeBSD 实机或 VM（X11 桌面），用于采集样本和验收
-2. FreeBSD CI runner 权限（`vmactions/freebsd-vm` 或 Cirrus CI）
-3. `net-mgmt/networkmgr` port 维护者的配合（阶段 4）
+**已具备**：本机 libvirt 域 `freebsd15`（FreeBSD 15.1 + Xfce/CDE + VNC），可在 guest 内原生构建；另有实体机 `X200-BSD`。
 
-**需向维护者确认（对应第 12 节）**：
+**仍需拿到**：
+1. 开机并核完第 14 节的 VM 准备清单（rust、sudo、crate 通路、GLX、AppIndicator、CJK 字体）
+2. 真实无线网卡的 `wpa_cli` 样本来源（`X200-BSD` 或一次性录制）
+3. GhostBSD 实机或镜像，用于桌面集成与 port 相关验收
+4. `net-mgmt/networkmgr` port 维护者的配合（阶段 4）
+5. 若要自动化 CI：远端 FreeBSD runner（Cirrus CI / `vmactions/freebsd-vm`）；本机 VM 只承担手工验收，不等价于 CI
+
+**需向维护者确认（对应第 16 节末尾）**：
 - 托盘菜单用原生 `muda` 而非 egui 绘制，是否接受
 - 是否要求"零 GTK 依赖"（这决定要不要改提权模型）
 - devd 三个 Python 脚本是否也要一并 Rust 化，还是允许长期保留
@@ -309,6 +339,162 @@ Python 的 `gettext` 是**纯 Python 解析 `.mo`**，不链接系统 `libintl`�
 - `tray-icon` 平台与依赖：`github.com/tauri-apps/tray-icon` 的 `README.md` 与 `Cargo.toml`（0.26.1）
 - `eframe` features：`github.com/emilk/egui` tag `0.37.0` 的 `crates/eframe/Cargo.toml`
 - `winit` BSD 支持：winit 源码 `platform_impl/linux/mod.rs` 的 target cfg 与 changelog
+- FreeBSD 15 `lang/rust` 版本：FreshPorts `lang/rust`（latest 1.99.1_1 / quarterly 1.98.1）
+- 本机 FreeBSD 15 VM 参数与环境限制：2026-11-07 对本机的**只读调查**（`virsh -c qemu:///system dominfo/dumpxml/domblklist`、libvirt 网络定义、SSH 配置、用户环境笔记）。VM 当时为关机状态，guest 内部软件状态**未经实测**，按第 14 节开机后逐项复核
 - 原仓库行为：本仓库 `670dd45` 源码
 
 > 本方案中所有"当前版本""平台支持"均为查证所得；实施前仍需在目标 FreeBSD 版本上复核一次，不要把这些结论当成永久事实。
+
+---
+
+## 13. 验收环境边界（有 VM 之后必须重新划界）
+
+**"有 FreeBSD 15 虚拟机"不等于"能全量验收"。** 把验收项按环境分成三类，避免阶段 3 结束时才发现关键路径没测过：
+
+| 类别 | 环境 | 能验什么 | 不能验什么 |
+|---|---|---|---|
+| A. 本机 Linux（Fedora） | 宿主 | 契约测试、`validate` 等价测试、`.mo` 解析单测、JSON 输出 diff、纯逻辑回归 | 任何 `sysrc` / `ifconfig` / `wpa_cli` 真实调用、任何 GUI |
+| B. `freebsd15` VM | guest 原生构建 | 编译与链接、GLX/glow 能否起窗、托盘图标能否出现、有线网卡启用/禁用、静态 IPv4/IPv6 写 `rc.conf`、`virsh attach/detach-interface` 触发 devd 三条链、7 语言加载与 CJK 字体、`sysrc`/`service`/`netstat` 真实输出 | **真实 Wi-Fi 扫描/连接/EAP**（无 wlan 设备）、GhostBSD 特有集成、MATE 面板、`sudo` 契约（除非按第 14 节装好） |
+| C. 实体机 / GhostBSD | `X200-BSD` 或 GhostBSD 实机 | 真实 `wpa_cli` 全流程、企业级 802.1X 实际认证、信号强度与图标、热插无线网卡、port 安装与自启动 | 不宜做破坏性网络实验 |
+
+**结论**：B 承担"构建 + 有线 + 桌面基础"验收；C 承担"无线 + 桌面集成 + 打包"验收。方案第 10 节每一条都应标注 A/B/C，阶段 3 的"验收完成"必须同时有 B 和 C 的记录，不能只凭 VM 绿灯宣布完成。
+
+---
+
+## 14. VM 开机后的准备清单（按顺序，逐项留记录）
+
+1. `virsh -c qemu:///system start freebsd15`，用 `net-dhcp-leases default` 取当前 IP（**不要硬编码 `192.168.122.170`**）。
+2. `pkg install rust` —— 确认版本 ≥ 1.90；本机 FreeBSD 15 latest 为 1.99.1_1，无需 rustup。
+3. `pkg install sudo`，写入与 `src/sudoers.d/networkmgr` 相同的授权行；**保持 `Exec=sudo networkmgr` 不变**，验的就是原契约。
+4. 打通 crate 获取：guest 内 cargo 配 `rsproxy`（与宿主 `~/.cargo/config.toml` 一致），或宿主 `cargo vendor` 打包后 scp 进去。GitHub 直连超时，必要时用 `ssh -R 17890:127.0.0.1:7890` 反向隧道。
+5. 装 `glib pkgconf gtk3` 及 AppIndicator 运行库，确认 `libappindicator` / `libayatana-appindicator` 在 FreeBSD 15 上的实际包名。
+6. 确认 CJK 字体与中文 locale（笔记记载已装中文 locale），供 egui `system_fonts` 使用。
+7. **spike ①**：最小 eframe 0.37（`default-features=false`, `glow+x11`）窗口，确认在 `vmvga` 下能创建 GL 上下文并绘制；失败则先查 `glxinfo` / `LIBGL_ALWAYS_SOFTWARE=1`。
+8. **spike ②**：最小 tray-icon 0.26.1（`libappindicator`）程序，确认图标出现在 Xfce 面板、左键/右键事件能收到。
+9. 录制 `ifconfig` / `netstat -rn` / `sysrc -n` 输出样本到 `tests/fixtures/`；wpa 样本留给 C 类环境。
+
+两个 spike 是**门槛而非可选项**：任何一个失败，先解决环境/后端选型，不要开始写业务逻辑。
+
+---
+
+## 15. 本轮补充的设计缺口
+
+### 15.1 统一的超时与错误策略（原来散落在各处）
+
+Rust 侧把下列常量集中在 `sys.rs`，禁止各处硬编码；每个子进程调用都必须返回带上下文的 `Result`，禁止静默吞错：
+
+| 场景 | 现值（来自 Python 源码） | Rust 处理 |
+|---|---|---|
+| `wpa_cli` 单次调用 | 5 秒超时 | `Command` + 超时包装，`FAIL`/非零/无 daemon → 明确的 `WpaUnavailable` |
+| `wait_for_connection` | 30 秒 | 后台任务内轮询，可取消 |
+| `wait_for_address` | 5 秒 | 同上 |
+| `wait_for_daemon` | 5 秒 | 同上 |
+| 托盘被动刷新 | 30 秒一轮 | 定时器线程，失败记日志并保留上一份快照 |
+| 连接动画 | 300 ms / 帧 | `request_repaint_after` |
+| 连接重试 | `MAX_ATTEMPTS = 3` | 常量，见 15.2 |
+| 写入校验 | 搜索域 ≤6 个且 ≤256 字符等 | `validate.rs`，全部拒绝用例写测试 |
+
+### 15.2 连接状态机与取消（原方案没定义）
+
+原 Python 版用 `self.connecting` 布尔 + 后台线程 + `idle_add`，没有处理"连接中用户切到另一个网络或点退出"。Rust 侧定：
+
+- **只有一个连接任务在跑**，`ConnectionState`（Idle / Connecting{ssid,card,attempt} / Failed / Connected）由后台任务持有，UI 只发命令、只读快照。
+- 取消用显式 token（`AtomicBool` 或 channel 丢弃），发新连接前先取消旧任务；窗口关闭/进程退出时 join 并置 Idle。
+- 3 次重试在后台任务内循环，每轮检查取消；"连接成功才保存 network block"仍由后台任务执行。
+- UI 在任何失败态都要给出可见反馈（对应 Python 的 `connection_failed` / `reopen_credentials_dialog`），不得静默。
+
+### 15.3 契约测试的具体形态（原方案只说"输出 JSON 比对"）
+
+- Python 版**不改源码**：新增一次性脚本 `tools/dump_state.py`，`from NetworkMgr.net_api import tray_state` 后 `json.dumps(..., sort_keys=True, ensure_ascii=False)` 输出。
+- Rust 侧加隐藏开关 `--dump-state`，输出**同一 schema**；两侧在同一台 C 类机器上、同一网络状态下逐字段 `diff`。
+- 命令输出样本（`ifconfig` / `wpa_cli` / `netstat` / `sysrc`）存 `tests/fixtures/`；Rust 的 `sys.rs` 之上用 trait 注入假输出，让 A 类环境也能跑全部解析测试。
+- 含 `"`、`\`、中文的 SSID 必须各有一份样本与往返测试。
+
+### 15.4 翻译提取链定案（原方案在 `xtr` 与脚本间摇摆）
+
+**采用自写脚本，不引入新依赖**：`tools/extract-i18n.py`（约 30 行）扫 Rust 源里的 `tr!("...")`，生成 gettext 可读的临时 POT 片段，再 `msgmerge -U` 合并进现有 `po/*.po`。保留 `po/networkmgr.pot` 作为基线、保留 7 个语言的既有译文；修正 `po/POTFILES.in` 使其列出真正的 Rust 源文件。理由：符合"简单优先、不引新依赖"，且 `xtr` 在 BSD 上的可用性还需额外验证。
+
+### 15.5 日志与可观测性（原方案完全缺失）
+
+- 日志落 `$XDG_DATA_HOME/networkmgr/networkmgr.log`，同时把启动失败/托盘创建失败写到 stderr（自启动失败时桌面不会显示任何东西）。
+- 每条记录：命令名、脱敏后的参数、返回码、耗时；**SSID 可记，密码、私钥路径、EAP 身份一律不记**。
+- 提供 `-v` 开 debug；UI 上每个失败动作都要有可见错误提示（对应用户约定的"异步 I/O 必须有错误反馈，严禁静默失败"）。
+- "托盘图标没出现"的排查顺序写进文档：日志 → spike ② → 面板插件 → D-Bus session → X11 授权。
+
+### 15.6 并行安装与回滚（原方案只写了一句"留 .py"）
+
+因为 `rc.conf` / `resolv.conf` / `wpa_supplicant.conf` 格式完全不变，**新旧两版可以交替启动**，这是回滚成立的前提：
+
+| 位置 | 灰度期 | 回滚动作 |
+|---|---|---|
+| `/usr/local/bin/networkmgr` | Rust 版 | 换回 Python 版二进制 |
+| `/usr/local/bin/networkmgr.py` | 旧 Python 版改名保留 | — |
+| desktop `Exec` | `sudo networkmgr`（不变） | 改成 `sudo networkmgr.py`（一行） |
+| `sudoers.d/networkmgr` | 授权 `/usr/local/bin/networkmgr`（不变） | 若回滚需临时授权 `.py`，或把文件换回旧名 |
+| devd 三个脚本 | 阶段 4 前**完全不动** | 无需回滚 |
+| 配置文件 | 不变 | 无需迁移 |
+
+阶段 4 改 devd action 路径时，同样保留旧脚本并只改 `networkmgr.conf` 的 action 一行。
+
+### 15.7 明确不做（Non-goals，防止范围膨胀）
+
+- 不做 Wayland 后端（eframe 关掉 `wayland`）
+- 不引入 netlink / NetworkManager / 任何 Linux 网络栈
+- 不新写 openrc 实现（README 的声明先按 1.4 节澄清，澄清前照 FreeBSD rc(8) 行为复刻）
+- 不改 `rc.conf` / `resolv.conf` / `wpa_supplicant.conf` / wireguard 配置格式
+- 不重设计图标与 7 语言译文，不重排菜单结构
+- 不做 Web、移动端、配置迁移工具（格式不变，无需迁移）
+- 不改认证算法与重试策略，不做"顺手"的架构优化
+
+### 15.8 决策记录（ADR）与重审条件
+
+| 决策 | 理由 | 什么情况下重审 |
+|---|---|---|
+| 托盘用原生 `muda`，窗口用 egui | egui 无系统托盘 | egui 生态出现官方托盘支持 |
+| `libappindicator` 而非 `ksni` | `Exec=sudo networkmgr` 是硬契约，sudo 下 session D-Bus 不可靠 | 提权模型改为普通用户运行 + 特权操作单独提权 |
+| 双二进制而非单进程 | eframe 无"无窗口常驻"标准用法 | eframe 提供稳定的 headless 事件循环接口 |
+| 纯 Rust `.mo` 解析而非 `gettext-rs` | 避免引入 libintl，保持零新增系统依赖 | 需要复数形式、`pgettext` 上下文等高级特性 |
+| `glow + x11`，关 `wgpu/wayland` | 依赖更少、体积更小、X11 路径成熟 | spike ① 失败，或目标平台转向 Wayland |
+| 四阶段渐进 | 每阶段可回退、可定位回归 | 上游要求一次性替换 |
+| guest 内原生构建 | 宿主无 freebsd target / cross / zig | 引入 `cross` 或远端 FreeBSD CI runner |
+
+---
+
+## 16. 本轮压力测试记录（frontier 与推荐答案）
+
+按 grilling 的设计树方式，把当前所有"前置条件已明确、可以立刻决定"的开放问题一次摆出。依用户指示，**下列推荐答案已直接采纳并写入第 13–15 节**，未逐轮等待确认；若某条要改，改对应章节即可。
+
+❓ **Q1** — **验收环境边界**：`freebsd15` 是 FreeBSD 15.1 + Xfce/CDE，不是 GhostBSD；没有真实无线网卡，也没有 GhostBSD 的 port 集成。是否接受把验收拆成 A/B/C 三类、并明确"VM 绿灯 ≠ 验收完成"？
+➡️ **接受**，按第 13 节矩阵执行，阶段 3 必须同时有 B 与 C 的记录。
+
+❓ **Q2** — **图形后端可行性门槛**：VM 是 `vmvga` 无 3D 加速，glow/GLX 可能起不来。是否同意先做最小 eframe spike，不过关就不写业务代码？
+➡️ **同意**，spike ① 列为阶段 0 门槛；失败先解决后端选型，不误判为业务 bug。
+
+❓ **Q3** — **托盘后端门槛**：Xfce 面板是否吃 AppIndicator 未知。是否同意 spike ② 与 ① 并列为门槛？
+➡️ **同意**；不显示时记为环境限制，再评估 `ksni`（不推翻 sudo 契约）。
+
+❓ **Q4** — **crate 获取通路**：guest 直连 GitHub 超时。是否采用「VM 内配 rsproxy 镜像，或宿主 `cargo vendor` 后 scp」而不假设网络可用？
+➡️ **采用**，并把 vendored distfile 作为阶段 4 port 的默认方案。
+
+❓ **Q5** — **sudo 契约在 VM 里怎么验**：guest 没装 sudo。是否同意在 VM 内装 sudo 并复刻 sudoers 片段、保持 desktop 文件原样，而不是临时改 `Exec`？
+➡️ **同意**；改 `Exec` 会让验的不再是原契约。
+
+❓ **Q6** — **无线样本来源**：VM 无 wlan。是否同意 wpa 全流程样本与验收交给 `X200-BSD` 或 GhostBSD 实机，VM 只跑 mock？
+➡️ **同意**，写进第 13 节矩阵；不虚构"VM 可全测"。
+
+❓ **Q7** — **交叉编译**：宿主没有 freebsd target，也没有 cross/zig。是否确认放弃交叉编译、统一在 guest 内原生构建？
+➡️ **确认**；CI 只作为后续可选项，本机 VM 承担手工验收。
+
+❓ **Q8** — **MSRV 与工具链**：FreeBSD 15 的 rust 为 1.98–1.99，宿主机 1.95，tray-icon MSRV 1.90。是否把 `rust-version` 定在 1.90 并要求在 VM 内 `cargo check` 复核 eframe 0.37 的实际 MSRV？
+➡️ **同意**；不凭宿主机版本推断 guest 可用。
+
+❓ **Q9** — **契约测试形态**：Python 版没有 `--dump-state`。是否同意不改 Python 源码、用一次性 `tools/dump_state.py` 产出同 schema JSON 做 diff？
+➡️ **同意**，见 15.3；样本入库，A 类环境也能跑解析测试。
+
+❓ **Q10** — **翻译提取链**：`xtr` 与自写脚本之间。是否采用零新依赖的自写脚本 + `msgmerge`？
+➡️ **采用**，见 15.4；顺带修正 `POTFILES.in`。
+
+❓ **Q11** — **状态机、日志、回滚、Non-goals、ADR**：原方案缺连接取消、超时与错误策略、日志可观测性、并行安装细节、明确的"不做什么"和决策重审条件。是否一次性补齐？
+➡️ **补齐**，见 15.1、15.2、15.5、15.6、15.7、15.8。
+
+**仍需用户/上游拍板、本轮未代为决定的**（这些答案依赖外部意见，不属于可自答的 frontier）：托盘菜单用原生 `muda` 是否可接受、是否要求零 GTK、devd 脚本是否一并 Rust 化、`openrc(8)` 声明的真实含义、`wheel` vs `operator`、版本号是否跳 8.0、以及何时把 `docs/rust-rewrite-plan` 推成 PR。
