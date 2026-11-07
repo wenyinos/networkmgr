@@ -106,9 +106,7 @@ pub fn ipv6_address(text: &str, field: &str, allow_scope: bool) -> Result<String
         Some((head, tail)) => (head, Some(tail)),
         None => (value, None),
     };
-    if value.ends_with('%')
-        || scope.is_some_and(|s| !allow_scope || interface(s).is_err())
-    {
+    if value.ends_with('%') || scope.is_some_and(|s| !allow_scope || interface(s).is_err()) {
         return Err(error());
     }
     let parsed: Ipv6Addr = address.parse().map_err(|_| error())?;
@@ -185,7 +183,15 @@ mod tests {
         for good in ["em0", "wlan0", "em0.10", "epair0a", "a"] {
             assert!(interface(good).is_ok(), "{good} should be valid");
         }
-        for bad in ["", "0em", "em0-1", "-em0", "a".repeat(16).as_str(), "em 0", "em0/1"] {
+        for bad in [
+            "",
+            "0em",
+            "em0-1",
+            "-em0",
+            "a".repeat(16).as_str(),
+            "em 0",
+            "em0/1",
+        ] {
             assert!(interface(bad).is_err(), "{bad:?} should be refused");
         }
     }
@@ -201,7 +207,10 @@ mod tests {
     fn ipv4_addresses() {
         assert_eq!(ipv4_address(" 192.168.1.1 ", "IP").unwrap(), "192.168.1.1");
         for bad in ["", "01.2.3.4", "1.2.3", "1.2.3.256", "1.2.3.4.5", "1.2.3.a"] {
-            assert!(ipv4_address(bad, "IP").is_err(), "{bad:?} should be refused");
+            assert!(
+                ipv4_address(bad, "IP").is_err(),
+                "{bad:?} should be refused"
+            );
         }
     }
 
@@ -211,14 +220,25 @@ mod tests {
         assert_eq!(ipv4_netmask(" 255.255.255.0 ").unwrap(), "255.255.255.0");
         assert_eq!(ipv4_netmask("32").unwrap(), "255.255.255.255");
         assert_eq!(ipv4_netmask("1").unwrap(), "128.0.0.0");
-        for bad in ["0", "33", "0.0.0.0", "0.0.0.255", "255.0.255.0", "abc", "24.1"] {
+        for bad in [
+            "0",
+            "33",
+            "0.0.0.0",
+            "0.0.0.255",
+            "255.0.255.0",
+            "abc",
+            "24.1",
+        ] {
             assert!(ipv4_netmask(bad).is_err(), "{bad:?} should be refused");
         }
     }
 
     #[test]
     fn ipv6_addresses_and_scopes() {
-        assert_eq!(ipv6_address("2001:db8::1", "GW", false).unwrap(), "2001:db8::1");
+        assert_eq!(
+            ipv6_address("2001:db8::1", "GW", false).unwrap(),
+            "2001:db8::1"
+        );
         assert_eq!(
             ipv6_address("fe80::1%em0", "GW", true).unwrap(),
             "fe80::1%em0"
@@ -243,7 +263,10 @@ mod tests {
 
     #[test]
     fn search_domain_lists() {
-        assert_eq!(search_domains("  example.org   lan. ").unwrap(), "example.org lan.");
+        assert_eq!(
+            search_domains("  example.org   lan. ").unwrap(),
+            "example.org lan."
+        );
         assert_eq!(search_domains("").unwrap(), "");
         assert!(search_domains("a..com").is_err());
         assert!(search_domains("-bad.com").is_err());

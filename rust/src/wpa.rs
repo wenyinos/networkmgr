@@ -264,9 +264,15 @@ mod tests {
     #[test]
     fn status_decodes_ssid_and_ignores_banner() {
         let status = wpa_status(STATUS);
-        assert_eq!(status.get("wpa_state").map(String::as_str), Some("COMPLETED"));
+        assert_eq!(
+            status.get("wpa_state").map(String::as_str),
+            Some("COMPLETED")
+        );
         assert_eq!(status.get("ssid").map(String::as_str), Some("中文 Net"));
-        assert_eq!(status.get("bssid").map(String::as_str), Some("00:11:22:33:44:55"));
+        assert_eq!(
+            status.get("bssid").map(String::as_str),
+            Some("00:11:22:33:44:55")
+        );
         assert!(!status.contains_key("Selected interface 'wlan0'"));
         assert!(wpa_status("").is_empty());
     }
@@ -350,8 +356,15 @@ mod tests {
             "a\rb\tc\nd",
         ] {
             let encoded = printf_encode(raw);
-            assert!(encoded.is_ascii(), "encoded must be printable ASCII: {encoded:?}");
-            assert_eq!(printf_decode(&encoded), raw, "round trip failed for {raw:?}");
+            assert!(
+                encoded.is_ascii(),
+                "encoded must be printable ASCII: {encoded:?}"
+            );
+            assert_eq!(
+                printf_decode(&encoded),
+                raw,
+                "round trip failed for {raw:?}"
+            );
         }
     }
 
@@ -405,9 +418,15 @@ mod tests {
     fn parse_key_values_ignores_banner() {
         let out = "Selected interface 'wlan0'\nwpa_state=COMPLETED\nssid=My Net\nip_address=192.168.1.5\n";
         let values = parse_key_values(out);
-        assert_eq!(values.get("wpa_state").map(String::as_str), Some("COMPLETED"));
+        assert_eq!(
+            values.get("wpa_state").map(String::as_str),
+            Some("COMPLETED")
+        );
         assert_eq!(values.get("ssid").map(String::as_str), Some("My Net"));
-        assert_eq!(values.get("ip_address").map(String::as_str), Some("192.168.1.5"));
+        assert_eq!(
+            values.get("ip_address").map(String::as_str),
+            Some("192.168.1.5")
+        );
         assert_eq!(values.len(), 3);
     }
 }
