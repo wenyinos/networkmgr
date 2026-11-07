@@ -141,7 +141,19 @@ fn icon_for(signal: Option<i32>, wireless: bool) -> Icon {
             // 4 根竖条，从底部往上点亮 bars 根
             let column = x / 8;
             let filled = column < bars && y >= 8 + (3 - column) * 4;
-            let (r, g, b) = if filled { color } else { (40, 40, 40) };
+            let (r, g, b) = if bars == 0 {
+                // 无信号/有线：画一个实心浅色方块。全暗的图标在深色面板上
+                // 等于没画，第一次 VM 验收就吃了这个亏。
+                if (10..22).contains(&x) && (10..22).contains(&y) {
+                    (210, 210, 210)
+                } else {
+                    (70, 70, 70)
+                }
+            } else if filled {
+                color
+            } else {
+                (40, 40, 40)
+            };
             pixels.extend_from_slice(&[r, g, b, 255]);
         }
     }
