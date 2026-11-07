@@ -4,5 +4,6 @@
 //! 通过 trait 注入。因此它可以直接在 Linux 宿主上用 mock 样本跑契约测试，
 //! 不需要 FreeBSD 交叉编译环境。
 
+pub mod ifconfig;
 pub mod validate;
 pub mod wpa;

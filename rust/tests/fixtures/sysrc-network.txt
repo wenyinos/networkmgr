@@ -1,0 +1,2 @@
+hostname: freebsd
+ifconfig_DEFAULT: DHCP inet6 accept_rtadv

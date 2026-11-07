@@ -292,7 +292,7 @@ Python 的 `gettext` 是**纯 Python 解析 `.mo`**，不链接系统 `libintl`�
 | **P1** | 即时模式 UI 与 GTK 对话框布局/交互不同，用户可见变化 | 框架范式差异 | 阶段 2 先小范围灰度；逐窗口对照第 1.3 节验收 |
 | **P2** | `openrc(8)` 支持声明与代码不符 | 全仓库仅 README 提及 | 重写前向维护者澄清，不要凭 README 造一套 openrc 分支 |
 | **P2** | DragonFlyBSD 上 `PREFIX` 落到 `sys.prefix` | `setup.py:22`、`wg_api.py:14` | Rust 侧显式按 OS 列表判定 `/usr/local` |
-| **P3** | `wheel` 组与 `%operator` sudoers 不一致 | README vs `src/sudoers.d/networkmgr` | 一并向维护者确认，重写时不要擅自二选一 |
+| ~~P3~~ **已解决** | `wheel` 组与 `%operator` sudoers 不一致 | README vs `src/sudoers.d/networkmgr` | 2026-11-07 已拍板统一为 `%wheel`，见第 17 节 |
 
 ---
 
@@ -518,8 +518,9 @@ Rust 侧把下列常量集中在 `sys.rs`，禁止各处硬编码；每个子进
 - 已装：`gtk3-3.24.52`、`glib`、`mesa-dri/libs-26.2.2`、`libglvnd`、`fontconfig`、**`wqy-fonts`（CJK 字体）**、`dejavu`、`libdbusmenu`，以及本轮新增的 `sudo`、`mesa-demos`(glxinfo)、`libayatana-appindicator`。
 - Xfce 正在运行，`xfce4-panel` 已加载 systray 插件并标明支持「应用程序指示器」；Xorg 在 `:0`（lightdm），SSH 会话需显式带 `DISPLAY` / `XAUTHORITY`。
 - **GLX 实测可用**：`glxinfo -B`（`DISPLAY=:0` + lightdm XAUTHORITY）报 llvmpipe 软件渲染、OpenGL 4.6 core、`direct rendering: Yes`。spike ① 的 P0 风险因此降为 **P2（性能而非可用性）**，但仍需真实 eframe 窗口复验。
-- `zemin` 属 `wheel`；`operator` 组存在但 `zemin` 不在其中。原 sudoers 片段授权 `%operator`，而 README 要求 `wheel` —— **验收前需定一个**，否则免密提权不生效。
+- `zemin` 属 `wheel`；`operator` 组存在但 `zemin` 不在其中。原 sudoers 片段授权 `%operator`，而 README 要求 `wheel` —— **已拍板统一为 `%wheel`**：VM 的 `/usr/local/etc/sudoers.d/networkmgr` 与仓库 `src/sudoers.d/networkmgr` 两处均已改，`visudo -c` 通过，`sudo -n -l` 对 `zemin` 显示 `(ALL) NOPASSWD: /usr/local/bin/networkmgr`。
 - 只有 `vtnet0` / `lo0`，确认无无线网卡。
+- 已只读采集契约样本入 `rust/tests/fixtures/`：`ifconfig -a`、`ifconfig -l ether`、`netstat -rn`、`sysrc -a`（网络相关行）。样本来自 FreeBSD 15.1-RELEASE-p6：仅 `vtnet0` / `lo0`，`ifconfig_DEFAULT: DHCP inet6 accept_rtadv`，默认路由经 `vtnet0`；`rust/src/ifconfig.rs` 的契约测试直接消费这些样本。
 - pkg 走 USTC 镜像（`mirrors.ustc.edu.cn`），`pkg update` 正常；首次 `pkg install` 因仓库同步被本地超时截断，但包实际已装好。
 
 ### 本机已落地（`rust/`）
