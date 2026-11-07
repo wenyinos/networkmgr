@@ -553,7 +553,7 @@ Rust 侧把下列常量集中在 `sys.rs`，禁止各处硬编码；每个子进
 
 ## 18. 完整实施（2026-11-07 晚，优先级高于前文）
 
-用户指示「继续完整实施，不必确认」。本轮把第 10 节验收清单里的两个 GUI spike、远端 FreeBSD CI、rustfmt 全部落地。**所有提交仍为本地、未 push，因此 CI 尚未真实运行过。**
+用户指示「继续完整实施，不必确认」。本轮把第 10 节验收清单里的两个 GUI spike、远端 FreeBSD CI、rustfmt 全部落地。**随后 10 个提交已 push 到 fork、默认分支已切到 `feat/rust-rewrite`、CI 已首次触发**，详见第 19 节。
 
 ### 18.1 rustfmt 统一（提交 `06dad8a`）
 
@@ -589,12 +589,30 @@ virsh -c qemu:///system net-dhcp-leases default
 ./rust/spikes/deploy-to-vm.sh zemin@<vm-ip> ./artifacts
 ```
 
-脚本自动探测 `DISPLAY=:0` 的 lightdm XAUTHORITY，设 `LIBGL_ALWAYS_SOFTWARE=1`，两个 spike 各跑 3 秒并打印退出码；`sh -n` 语法校验通过。根 `.gitignore` 加了 `/artifacts/`，避免产物误入库。**这一步尚未执行**：需要先 push 触发 CI 拿到 FreeBSD 二进制。
+脚本自动探测 `DISPLAY=:0` 的 lightdm XAUTHORITY，设 `LIBGL_ALWAYS_SOFTWARE=1`，两个 spike 各跑 3 秒并打印退出码；`sh -n` 语法校验通过。根 `.gitignore` 加了 `/artifacts/`，避免产物误入库。**这一步尚未执行**：分支虽已 push、CI 已触发，仍要等 artifact 产出并下载后才能跑。
 
 ### 18.5 仍未关闭 / 边界
 
-- **未 push**：CI 没有真实跑过；FreeBSD 上 `appindicator` 后端的编译链接、图标是否出现在 Xfce 面板，仍**未经 B 类验证**。第 10 节第 312 / 313 条保持未勾选。
+- **CI 首次运行**：见第 19 节。CI 只做构建、不启桌面：FreeBSD 上 `appindicator` 后端的编译链接由 CI 验证，但图标是否出现在 Xfce 面板仍**未经 B 类 VM 实跑验证**。第 10 节第 312 / 313 条保持未勾选。
 - 第 9 节 P0（VM 无无线网卡）、P1（缺 `ctrl_interface`）不变；真实 `wpa_cli` 正常输出样本仍缺，实体机 `/etc/wpa_supplicant.conf` 与 `wpa_supplicant` 全程未改动。
 - `src/wpa_supplicant.conf` 的 `ctrl_interface_group=operator` 与 `%wheel` 不一致仍只记录未改。
 - 本轮**没有产出可安装的网络管理二进制**：spike 只验证图形栈，业务逻辑仍在 Python 版，阶段 0/1 的功能迁移尚未开始。VM 仍未装 rust/cargo，遵守第 17 节的边界。
+
+---
+
+## 19. 仓库状态变更（2026-11-07 21:00，优先级高于前文）
+
+用户指令「推送到远程 / 将 rust 版设为默认分支 / 更新文档 / 跑一遍测试」。
+
+| 项 | 结果 |
+|---|---|
+| push | `git push -u origin feat/rust-rewrite`，10 个本地提交（`7525a50` … `c744387`）全部推送成功，分支跟踪 `origin/feat/rust-rewrite` |
+| fork 默认分支 | 由 `master` 改为 **`feat/rust-rewrite`**（`gh repo edit wenyinos/networkmgr --default-branch`），`gh api` 回读确认为该值 |
+| 上游 | `ghostbsd/networkmgr` **未改动**，默认分支仍是 `master`；PR #133 仍 OPEN（base `master` / head `wenyinos:i18n/complete-zh-cn`），未受影响 |
+| CI | `.github/workflows/freebsd-rust.yml` 被 push 触发，`FreeBSD 15 Rust build` 首次运行；结果不在此固化，用 `gh run list --repo wenyinos/networkmgr` 复核 |
+| 本地测试 | core `cargo test` **27 passed**；spikes `cargo test --no-default-features --features sni` **1 passed**；两 crate `cargo fmt --check` 干净；workflow YAML、`prepare` / `run` / 部署脚本 `sh -n` 全通过 |
+| 文档 | 本章与 `AGENTS.md` 第 8 节同步仓库状态；`AGENTS.md`、`.workbuddy/` 仍保持未跟踪、不提交 |
+
+**边界说明**：改的是 **fork** 的默认分支，**不是**把 Rust 版推成上游主线。Python 版仍是上游 `master` 的正式实现；fork 默认分支变化只影响克隆与该 fork 的 PR 默认行为，不改变上游发布流程，也不代表 Rust 版已可交付。第 9 节 P0 / P1 风险、实体机 `ctrl_interface` 缺失、真实 `wpa_cli` 样本缺口均维持原状。
+
 
