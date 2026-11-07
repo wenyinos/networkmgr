@@ -8,6 +8,7 @@ pub mod config;
 pub mod i18n;
 pub mod ifconfig;
 pub mod state;
+pub mod sys;
 pub mod validate;
 pub mod wg;
 pub mod wpa;

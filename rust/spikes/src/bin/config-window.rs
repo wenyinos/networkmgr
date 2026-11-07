@@ -9,6 +9,7 @@
 use std::time::{Duration, Instant};
 
 use eframe::egui;
+use networkmgr_core::sys::{RealRunner, Sys};
 use networkmgr_core::{config, validate};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -48,6 +49,14 @@ struct ConfigWindow {
     gateway6: String,
     preview: String,
     errors: Vec<String>,
+    /// 是否真的写盘。默认 false，只有 `--apply` 才执行；骨架阶段先保证预览可用。
+    apply_for_real: bool,
+    /// 待写入的 `rc.conf` 变量。
+    commands: Vec<(String, String)>,
+    /// 待整份改写的 `resolv.conf` 内容。
+    resolv: Option<String>,
+    status: String,
+    runner: RealRunner,
 }
 
 impl Default for ConfigWindow {
@@ -71,6 +80,11 @@ impl Default for ConfigWindow {
             gateway6: String::new(),
             preview: String::new(),
             errors: Vec::new(),
+            apply_for_real: false,
+            commands: Vec::new(),
+            resolv: None,
+            status: String::new(),
+            runner: RealRunner::new(),
         }
     }
 }
@@ -79,7 +93,9 @@ impl ConfigWindow {
     /// 校验当前输入并生成将要写入的 `rc.conf` 行与 `resolv.conf` 内容。
     fn apply(&mut self) {
         self.errors.clear();
-        let mut lines: Vec<String> = Vec::new();
+        self.commands.clear();
+        self.resolv = None;
+        self.status.clear();
         let nic = self.interfaces[self.selected].clone();
 
         let rc_nic = match validate::interface(&nic) {
@@ -94,7 +110,7 @@ impl ConfigWindow {
         match self.method4 {
             Method4::Dhcp => {
                 let value = config::ifconfig_value(&nic, config::AddressMethod::Dhcp);
-                lines.push(format!("ifconfig_{rc_nic}={value}"));
+                self.commands.push((format!("ifconfig_{rc_nic}"), value));
             }
             Method4::Manual => {
                 let ip = self.check(validate::ipv4_address(&self.ip, "IP"));
@@ -107,13 +123,13 @@ impl ConfigWindow {
                             netmask: &netmask,
                         },
                     );
-                    lines.push(format!("ifconfig_{rc_nic}={value}"));
+                    self.commands.push((format!("ifconfig_{rc_nic}"), value));
                 }
                 if !self.gateway.trim().is_empty() {
                     if let Some(gateway) =
                         self.check(validate::ipv4_address(&self.gateway, "Gateway"))
                     {
-                        lines.push(format!("defaultrouter={gateway}"));
+                        self.commands.push(("defaultrouter".to_string(), gateway));
                     }
                 }
                 let dns1 = if self.dns1.trim().is_empty() {
@@ -136,7 +152,7 @@ impl ConfigWindow {
                         .into_iter()
                         .flatten()
                         .collect();
-                    lines.push(config::render_resolv_conf(
+                    self.resolv = Some(config::render_resolv_conf(
                         if search.is_empty() {
                             None
                         } else {
@@ -150,28 +166,61 @@ impl ConfigWindow {
 
         match self.method6 {
             Method6::Slaac => {
-                lines.push(format!("ifconfig_{rc_nic}_ipv6=inet6 accept_rtadv"));
-                lines.push("rtsold_enable=YES".to_string());
+                self.commands.push((
+                    format!("ifconfig_{rc_nic}_ipv6"),
+                    "inet6 accept_rtadv".to_string(),
+                ));
+                self.commands
+                    .push(("rtsold_enable".to_string(), "YES".to_string()));
             }
             Method6::Manual => {
                 let address = self.check(validate::ipv6_address(&self.ip6, "IPv6", false));
                 let prefix = self.check(validate::ipv6_prefixlen(&self.prefix6));
                 if let (Some(address), Some(prefix)) = (address, prefix) {
-                    lines.push(format!(
-                        "ifconfig_{rc_nic}_ipv6=inet6 {address} prefixlen {prefix}"
+                    self.commands.push((
+                        format!("ifconfig_{rc_nic}_ipv6"),
+                        format!("inet6 {address} prefixlen {prefix}"),
                     ));
                 }
                 if !self.gateway6.trim().is_empty() {
                     if let Some(gateway) =
                         self.check(validate::ipv6_address(&self.gateway6, "Gateway", true))
                     {
-                        lines.push(format!("ipv6_defaultrouter={gateway}"));
+                        self.commands
+                            .push(("ipv6_defaultrouter".to_string(), gateway));
                     }
                 }
             }
         }
 
-        self.preview = lines.join("\n");
+        self.preview = self
+            .commands
+            .iter()
+            .map(|(name, value)| format!("{name}={value}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        if let Some(resolv) = &self.resolv {
+            self.preview.push_str("\n--- /etc/resolv.conf ---\n");
+            self.preview.push_str(resolv);
+        }
+
+        if !self.apply_for_real || !self.errors.is_empty() {
+            return;
+        }
+        let sys = Sys::new(&self.runner);
+        for (name, value) in &self.commands {
+            if let Err(error) = sys.sysrc_set(name, value) {
+                self.status = format!("FAILED {name}: {error}");
+                return;
+            }
+        }
+        if let Some(resolv) = &self.resolv {
+            if let Err(error) = std::fs::write("/etc/resolv.conf", resolv) {
+                self.status = format!("FAILED /etc/resolv.conf: {error}");
+                return;
+            }
+        }
+        self.status = format!("Applied {} rc.conf entries", self.commands.len());
     }
 
     /// 校验一个字段：成功取值，失败记录错误并返回 None。
@@ -200,7 +249,12 @@ impl eframe::App for ConfigWindow {
                             ui.selectable_value(&mut self.selected, index, name);
                         }
                     });
-                if ui.button("Validate & preview").clicked() {
+                let label = if self.apply_for_real {
+                    "Apply"
+                } else {
+                    "Validate & preview"
+                };
+                if ui.button(label).clicked() {
                     self.apply();
                 }
             });
@@ -265,8 +319,15 @@ impl eframe::App for ConfigWindow {
             for error in &self.errors {
                 ui.colored_label(egui::Color32::from_rgb(200, 60, 60), error);
             }
+            if !self.status.is_empty() {
+                ui.colored_label(egui::Color32::from_rgb(40, 140, 90), &self.status);
+            }
             if !self.preview.is_empty() {
-                ui.label("Would write:");
+                ui.label(if self.apply_for_real {
+                    "Will write:"
+                } else {
+                    "Would write (dry run, pass --apply to write):"
+                });
                 ui.monospace(&self.preview);
             }
 
@@ -357,6 +418,9 @@ fn main() -> eframe::Result<()> {
         .ok()
         .and_then(|raw| raw.parse::<u64>().ok())
         .map(Duration::from_secs);
+    // 默认只预览：写 /etc/rc.conf 与 /etc/resolv.conf 需要显式 --apply，
+    // 且真实运行时必须已经通过 `sudo networkmgr_configuration` 提权。
+    let apply_for_real = std::env::args().any(|arg| arg == "--apply");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([520.0, 460.0])
@@ -370,6 +434,7 @@ fn main() -> eframe::Result<()> {
         Box::new(move |_cc| {
             Ok(Box::new(ConfigWindow {
                 limit,
+                apply_for_real,
                 ..Default::default()
             }))
         }),

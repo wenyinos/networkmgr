@@ -1,0 +1,455 @@
+//! 命令执行层：把纯逻辑层与真实系统隔开。
+//!
+//! 所有系统命令都经过 [`Runner`] trait：A 类环境用 [`FakeRunner`] 记录调用并返回
+//! 预置输出，B/C 类用 [`RealRunner`] 真正执行。这样"写了什么命令、用了什么参数"
+//! 也能在 Linux 上断言，不必等到 FreeBSD。
+//!
+//! 超时用轮询 + 临时文件实现，而不是管道：`Command::output()` 没有超时，
+//! 而先 `try_wait` 再读管道可能被写满的缓冲区卡住。输出落到临时文件后，
+//! 超时可以直接 kill，不会留下读不完的管道。
+
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::fs::{self, File};
+use std::io;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::thread;
+use std::time::{Duration, Instant};
+
+use crate::config;
+use crate::ifconfig;
+use crate::state::{self, Snapshot, TrayState};
+use crate::wpa;
+
+/// 单条命令的默认超时，与方案第 15.1 节一致。
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// wpa_supplicant 控制 socket 目录。
+pub const WPA_CTRL_DIR: &str = "/var/run/wpa_supplicant";
+
+/// 命令执行失败的原因。
+#[derive(Debug)]
+pub enum SysError {
+    /// 进程起不来（命令不存在、权限不足）。
+    Spawn(io::Error),
+    /// 超过超时时间，已被 kill。
+    Timeout { program: String, seconds: u64 },
+    /// 写 `rc.conf` 前被安全校验拒绝，命令没有执行。
+    Rejected(config::ConfigError),
+}
+
+impl std::fmt::Display for SysError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Spawn(error) => write!(f, "failed to run command: {error}"),
+            Self::Timeout { program, seconds } => {
+                write!(f, "{program} did not finish within {seconds}s")
+            }
+            Self::Rejected(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl From<config::ConfigError> for SysError {
+    fn from(error: config::ConfigError) -> Self {
+        Self::Rejected(error)
+    }
+}
+
+impl std::error::Error for SysError {}
+
+/// 一条命令的结果。`success` 为 false 时调用方按原 Python 版的语义处理。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandOutput {
+    pub success: bool,
+    pub text: String,
+}
+
+impl CommandOutput {
+    fn ok(text: impl Into<String>) -> Self {
+        Self {
+            success: true,
+            text: text.into(),
+        }
+    }
+}
+
+/// 命令执行器。
+pub trait Runner {
+    fn run(&self, program: &str, args: &[&str]) -> Result<CommandOutput, SysError>;
+}
+
+/// 真正执行命令，带超时。
+pub struct RealRunner {
+    timeout: Duration,
+}
+
+impl RealRunner {
+    pub fn new() -> Self {
+        Self {
+            timeout: DEFAULT_TIMEOUT,
+        }
+    }
+
+    pub fn with_timeout(timeout: Duration) -> Self {
+        Self { timeout }
+    }
+}
+
+impl Default for RealRunner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+static TEMP_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+impl Runner for RealRunner {
+    fn run(&self, program: &str, args: &[&str]) -> Result<CommandOutput, SysError> {
+        let path = std::env::temp_dir().join(format!(
+            "networkmgr-{}-{}.log",
+            std::process::id(),
+            TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        let file = File::create(&path).map_err(SysError::Spawn)?;
+        let stderr = file.try_clone().map_err(SysError::Spawn)?;
+
+        let mut child = Command::new(program)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(file))
+            .stderr(Stdio::from(stderr))
+            .spawn()
+            .map_err(SysError::Spawn)?;
+
+        let deadline = Instant::now() + self.timeout;
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    let text = fs::read_to_string(&path).unwrap_or_default();
+                    let _ = fs::remove_file(&path);
+                    return Ok(CommandOutput {
+                        success: status.success(),
+                        text,
+                    });
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    let _ = fs::remove_file(&path);
+                    return Err(SysError::Spawn(error));
+                }
+            }
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = fs::remove_file(&path);
+                return Err(SysError::Timeout {
+                    program: program.to_string(),
+                    seconds: self.timeout.as_secs(),
+                });
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+}
+
+/// 测试用执行器：按 `program arg1 arg2` 匹配预置输出，并记录全部调用。
+pub struct FakeRunner {
+    responses: BTreeMap<String, CommandOutput>,
+    calls: RefCell<Vec<String>>,
+}
+
+impl FakeRunner {
+    pub fn new() -> Self {
+        Self {
+            responses: BTreeMap::new(),
+            calls: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// 预置一条响应，键是 `program arg1 arg2` 形式的完整命令行。
+    pub fn expect(mut self, command: &str, success: bool, text: &str) -> Self {
+        self.responses.insert(
+            command.to_string(),
+            CommandOutput {
+                success,
+                text: text.to_string(),
+            },
+        );
+        self
+    }
+
+    /// 已发生的调用，按顺序。
+    pub fn calls(&self) -> Vec<String> {
+        self.calls.borrow().clone()
+    }
+}
+
+impl Default for FakeRunner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Runner for FakeRunner {
+    fn run(&self, program: &str, args: &[&str]) -> Result<CommandOutput, SysError> {
+        let key = std::iter::once(program)
+            .chain(args.iter().copied())
+            .collect::<Vec<_>>()
+            .join(" ");
+        self.calls.borrow_mut().push(key.clone());
+        Ok(self
+            .responses
+            .get(&key)
+            .cloned()
+            .unwrap_or_else(|| CommandOutput::ok("")))
+    }
+}
+
+/// 面向 NetworkMgr 的系统操作包装。
+pub struct Sys<'a, R: Runner> {
+    runner: &'a R,
+}
+
+impl<'a, R: Runner> Sys<'a, R> {
+    pub fn new(runner: &'a R) -> Self {
+        Self { runner }
+    }
+
+    /// `sysrc name=value`；非法名字或值在发命令前就被拒绝。
+    ///
+    /// 校验失败返回 [`SysError::Rejected`]，**不会**静默跳过——否则调用方会以为
+    /// 写成功，而 `rc.conf` 里什么都没有。
+    pub fn sysrc_set(&self, name: &str, value: &str) -> Result<(), SysError> {
+        let args = config::sysrc_set_args(name, value)?;
+        self.call(&args)
+    }
+
+    /// `sysrc -x name`。
+    pub fn sysrc_unset(&self, name: &str) -> Result<(), SysError> {
+        let args = config::sysrc_unset_args(name)?;
+        self.call(&args)
+    }
+
+    /// `ifconfig <nic>`，失败时返回空串（与 Python `_ifconfig` 一致）。
+    pub fn ifconfig(&self, nic: &str) -> String {
+        self.text("ifconfig", &[nic])
+    }
+
+    /// `netstat -rn`。
+    pub fn netstat_rn(&self) -> String {
+        self.text("netstat", &["-rn"])
+    }
+
+    /// `wpa_cli -i <nic> status` 解析后的键值；daemon 不可达时为空表。
+    pub fn wpa_status(&self, nic: &str) -> BTreeMap<String, String> {
+        let text = self.text("wpa_cli", &["-i", nic, "status"]);
+        wpa::wpa_status(&text)
+    }
+
+    /// `wpa_cli -i <nic> bss current` 的原始输出。
+    pub fn wpa_bss_current(&self, nic: &str) -> String {
+        self.text("wpa_cli", &["-i", nic, "bss", "current"])
+    }
+
+    /// `wpa_cli -i <nic> save_config`，成功后把配置文件权限压回 0600。
+    ///
+    /// daemon 自己的 chmod 是 `#ifdef ANDROID`，FreeBSD 上 rename 之后权限由
+    /// umask 决定，而文件里全是口令，所以每次都要补一次。
+    pub fn wpa_save_config(&self, nic: &str) -> bool {
+        let output = self.run("wpa_cli", &["-i", nic, "save_config"]);
+        let ok = output.is_some_and(|output| output.success && !output.text.contains("FAIL"));
+        if ok {
+            restrict_permissions("/etc/wpa_supplicant.conf");
+        }
+        ok
+    }
+
+    /// `service <name> <action>`；忽略退出码，与 Python 的 `check=False` 一致。
+    pub fn service(&self, name: &str, action: &str) -> Result<(), SysError> {
+        self.call(&["service".to_string(), name.to_string(), action.to_string()])
+    }
+
+    /// `wg-quick up|down <device>`。
+    pub fn wg_quick(&self, action: &str, device: &str) -> Result<(), SysError> {
+        self.call(&crate::wg::wg_quick_args(action, device))
+    }
+
+    /// 组装一次完整的托盘状态，等价 `net_api.tray_state()`。
+    pub fn tray_state(&self) -> TrayState {
+        let netstat = self.netstat_rn();
+        let Some(card) = ifconfig::default_route_interface(&netstat).map(str::to_string) else {
+            return TrayState::no_card();
+        };
+        let text = self.ifconfig(&card);
+
+        let (wpa_state, ssid, bssid, level, noise) = if card.contains("wlan") {
+            let status = self.wpa_status(&card);
+            let bss = wpa::parse_key_values(&self.wpa_bss_current(&card));
+            let read = |key: &str| {
+                bss.get(key)
+                    .and_then(|value| value.trim().parse::<i32>().ok())
+            };
+            let wpa_state = status.get("wpa_state").cloned();
+            let ssid = status.get("ssid").cloned();
+            let bssid = status.get("bssid").cloned().unwrap_or_default();
+            (wpa_state, ssid, bssid, read("level"), read("noise"))
+        } else {
+            (None, None, String::new(), None, None)
+        };
+
+        state::build(&Snapshot {
+            card: Some(&card),
+            ifconfig_text: &text,
+            wpa_state: wpa_state.as_deref(),
+            ssid: ssid.as_deref(),
+            bssid: &bssid,
+            level,
+            noise,
+        })
+    }
+
+    fn text(&self, program: &str, args: &[&str]) -> String {
+        self.run(program, args)
+            .map(|output| output.text)
+            .unwrap_or_default()
+    }
+
+    fn run(&self, program: &str, args: &[&str]) -> Option<CommandOutput> {
+        self.runner.run(program, args).ok()
+    }
+
+    fn call(&self, args: &[String]) -> Result<(), SysError> {
+        let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+        self.runner.run(borrowed[0], &borrowed[1..]).map(|_| ())
+    }
+}
+
+/// 把敏感文件的权限压回 0600。
+#[cfg(unix)]
+fn restrict_permissions(path: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+}
+
+#[cfg(not(unix))]
+fn restrict_permissions(_path: &str) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sysrc_set_issues_the_expected_command() {
+        let fake = FakeRunner::new();
+        let sys = Sys::new(&fake);
+        sys.sysrc_set("ifconfig_em0", "inet 10.0.0.2 netmask 255.255.255.0")
+            .unwrap();
+        assert_eq!(
+            fake.calls(),
+            vec!["sysrc ifconfig_em0=inet 10.0.0.2 netmask 255.255.255.0".to_string()]
+        );
+    }
+
+    #[test]
+    fn unsafe_values_are_rejected_before_running_anything() {
+        let fake = FakeRunner::new();
+        let sys = Sys::new(&fake);
+        let error = sys.sysrc_set("ifconfig_em0", "DHCP; reboot").unwrap_err();
+        assert!(matches!(error, SysError::Rejected(_)));
+        assert!(fake.calls().is_empty());
+        assert!(error.to_string().contains("Refusing to write"));
+    }
+
+    #[test]
+    fn sysrc_unset_uses_the_minus_x_form() {
+        let fake = FakeRunner::new();
+        let sys = Sys::new(&fake);
+        sys.sysrc_unset("defaultrouter").unwrap();
+        assert_eq!(fake.calls(), vec!["sysrc -x defaultrouter".to_string()]);
+    }
+
+    #[test]
+    fn tray_state_walks_the_wired_path() {
+        let fake = FakeRunner::new()
+            .expect(
+                "netstat -rn",
+                true,
+                "default            192.168.122.1      UGS          vtnet0\n",
+            )
+            .expect(
+                "ifconfig vtnet0",
+                true,
+                "vtnet0: flags=1008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,LOWER_UP> metric 0 mtu 1500\n\tstatus: active\n\tinet 192.168.122.170 netmask 0xffffff00 broadcast 192.168.122.255\n",
+            );
+        let state = Sys::new(&fake).tray_state();
+        assert_eq!(state.kind, Some("wire"));
+        assert_eq!(state.connection, "Connected");
+        assert_eq!(
+            state.tooltip,
+            "inet 192.168.122.170 netmask 255.255.255.0 broadcast 192.168.122.255"
+        );
+        // 有线路径不应去问 daemon
+        assert!(!fake.calls().iter().any(|call| call.starts_with("wpa_cli")));
+    }
+
+    #[test]
+    fn tray_state_walks_the_wireless_path() {
+        let fake = FakeRunner::new()
+            .expect(
+                "netstat -rn",
+                true,
+                "default            192.168.122.1      UGS          wlan0\n",
+            )
+            .expect(
+                "ifconfig wlan0",
+                true,
+                "wlan0: flags=1008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST> metric 0 mtu 1500\n\tstatus: associated\n\tinet 192.0.2.77 netmask 0xffffff00 broadcast 192.0.2.255\n",
+            )
+            .expect(
+                "wpa_cli -i wlan0 status",
+                true,
+                "wpa_state=COMPLETED\nssid=Home\nbssid=00:11:22:33:44:55\n",
+            )
+            .expect(
+                "wpa_cli -i wlan0 bss current",
+                true,
+                "level=-35\nnoise=-95\n",
+            );
+        let state = Sys::new(&fake).tray_state();
+        assert_eq!(state.kind, Some("wifi"));
+        assert_eq!(state.connection, "Connected");
+        assert_eq!(state.ssid.as_deref(), Some("Home"));
+        assert_eq!(state.signal, Some(240));
+    }
+
+    #[test]
+    fn tray_state_without_a_default_route_is_stable() {
+        let fake = FakeRunner::new().expect("netstat -rn", true, "Internet:\n");
+        assert_eq!(Sys::new(&fake).tray_state(), TrayState::no_card());
+    }
+
+    #[test]
+    fn save_config_reports_failure_on_fail_output() {
+        let fake = FakeRunner::new().expect("wpa_cli -i wlan0 save_config", true, "FAIL\n");
+        assert!(!Sys::new(&fake).wpa_save_config("wlan0"));
+    }
+
+    #[test]
+    fn real_runner_times_out_instead_of_hanging() {
+        let runner = RealRunner::with_timeout(Duration::from_millis(150));
+        let started = Instant::now();
+        let error = runner.run("sleep", &["5"]).unwrap_err();
+        assert!(matches!(error, SysError::Timeout { .. }));
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn real_runner_captures_output_and_status() {
+        let runner = RealRunner::with_timeout(Duration::from_secs(5));
+        let output = runner.run("sh", &["-c", "printf hi; exit 3"]).unwrap();
+        assert_eq!(output.text, "hi");
+        assert!(!output.success);
+    }
+}
