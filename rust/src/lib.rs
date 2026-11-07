@@ -5,6 +5,7 @@
 //! 不需要 FreeBSD 交叉编译环境。
 
 pub mod config;
+pub mod i18n;
 pub mod ifconfig;
 pub mod state;
 pub mod validate;

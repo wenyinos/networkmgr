@@ -45,19 +45,19 @@ jobs:
             cargo --version
 
             # 构建缓存放在 workspace 之外，rsync copyback 才不会把 GB 级 target/ 回传宿主。
-            export CARGO_TARGET_DIR=/tmp/networkmgr-target
-            mkdir -p "$CARGO_TARGET_DIR"
-
             cd rust
-            cargo test --locked
+            CARGO_TARGET_DIR=/tmp/nm-core cargo test --locked
+            CARGO_TARGET_DIR=/tmp/nm-core cargo build --release --locked --bin dump-state
 
             cd spikes
-            cargo test --no-default-features --features sni --locked
-            cargo build --release --locked --bins
+            CARGO_TARGET_DIR=/tmp/nm-spikes cargo test --no-default-features --features sni --locked
+            CARGO_TARGET_DIR=/tmp/nm-spikes cargo build --release --locked --bins
 
             mkdir -p ../../artifacts
-            cp "$CARGO_TARGET_DIR/release/eframe-window" \
-               "$CARGO_TARGET_DIR/release/tray-status" \
+            cp /tmp/nm-core/release/dump-state \
+               /tmp/nm-spikes/release/eframe-window \
+               /tmp/nm-spikes/release/tray-status \
+               /tmp/nm-spikes/release/config-window \
                ../../artifacts/
             file ../../artifacts/*
 

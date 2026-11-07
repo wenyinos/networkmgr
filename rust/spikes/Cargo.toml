@@ -16,6 +16,8 @@ appindicator = ["tray-icon/libappindicator", "dep:gtk"]
 sni = ["tray-icon/ksni"]
 
 [dependencies]
+# 阶段 2 起 GUI 直接复用纯逻辑层：校验与 rc.conf/resolv.conf 生成都在 core 里。
+networkmgr-core = { path = ".." }
 # 只开 glow + x11：避开 wgpu / wayland 在 BSD 上的一整套系统库依赖。
 # system_fonts 是中文界面必需，egui 默认字体不含 CJK。
 eframe = { version = "0.37.0", default-features = false, features = [
