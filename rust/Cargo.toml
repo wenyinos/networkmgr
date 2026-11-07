@@ -1,0 +1,9 @@
+[package]
+name = "networkmgr-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+
+# 纯逻辑层刻意零依赖：既符合 BSD port 的离线构建要求，也让宿主 Linux
+# 上的契约测试不需要任何 FreeBSD 系统库。GUI / 托盘依赖留到后续阶段。
+[dependencies]
