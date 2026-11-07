@@ -68,3 +68,35 @@
 2. 把 `dump-state` 纳入远端 CI 产物，在 B 类环境与 Python `tray_state()` 做一次逐字段 diff。
 3. 阶段 2 起步：`networkmgr_configuration` 的 eframe 配置窗口骨架（IPv4/IPv6 双标签）。
 4. 仍未关闭：第 9 节 P0（VM 无无线网卡）、P1（缺 `ctrl_interface`）、C 类实机验收。
+
+---
+
+## 第二轮（22:00–22:20）：阶段 1 收尾与阶段 2 起步
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 6 | 实现 `i18n`：GNU MO 读取器 | 构建 | `rust/src/i18n.rs`（326 行 / 7 测试） | ✅ 完成 |
+| 7 | `dump-state` 进 CI 产物并与 Python 实机比对 | 构建 | workflow 四产物；VM 实跑逐字节一致 | ✅ 完成 |
+| 8 | 阶段 2 起步：配置窗口骨架 | 构建 | `rust/spikes/src/bin/config-window.rs`（377 行 / 5 测试） | ✅ 完成 |
+| 9 | 更新方案、README 与报告 | 写作 | 方案第 22 节、README 仓库内容表 | ✅ 完成 |
+
+### 关键结果
+
+- `i18n.rs`：GNU MO 解析（magic 大小端、偏移表、单复数取第一形态、`Language:` header、
+  `LANG` 收敛、缺失回退原文）。用 `msgfmt po/zh_CN.po -o /tmp/zh_CN.mo` 编译真实目录，
+  `NETWORKMGR_MO=... cargo test` 端到端读取通过。
+- **两个坑**：① MO 布局是「全部 msgid 连续放，再放全部 msgstr」，译串偏移必须用所有 msgid 总长；
+  ② `fuzzy` 条目不会写入 `.mo`，当前分支 `po/zh_CN.po` 仍是旧版（16 译 / 9 fuzzy / 24 未译），
+  所以测试只断言「至少有一条译文」，不写死措辞。
+- `config-window`：接口下拉、IPv4/IPv6 双标签、DHCP/Manual 与 SLAAC/Manual 切换、逐字段校验、
+  生成 `rc.conf` 行与 `resolv.conf` 预览；**不写盘**。`rust/spikes` 新增 `networkmgr-core` 路径依赖。
+- **`dump-state` 实机比对**：CI run `42379533273` 的四产物中，`dump-state` scp 进 VM 运行；
+  同一时刻采集 `netstat -rn` / `ifconfig vtnet0`，本机 Python 版复算与 Rust 输出**逐字节一致**。
+  输出：`{"card":"vtnet0","kind":"wire","connection":"Connected","ssid":null,"signal":null,"tooltip":"inet 192.168.122.170 netmask 255.255.255.0 broadcast 192.168.122.255"}`。
+- 测试：core **65 passed**、spikes **6 passed**；`cargo fmt --check` 干净。
+
+### 未执行 / 仍关闭
+
+- 无线分支的实机比对：VM 无无线网卡，需 C 类实机（`X200-BSD` / GhostBSD）。
+- 配置窗口的写盘与接口重启：属阶段 2 后续，骨架只做校验与预览。
+- C 类验收、P0/P1 风险、PR #133 合并（zh_CN 旧译）全部未变；本轮无可安装二进制。

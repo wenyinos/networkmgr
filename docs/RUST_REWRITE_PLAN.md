@@ -672,5 +672,34 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - 未关闭：`dump-state` 与 Python 在同一台 FreeBSD 上的**实机逐字段 diff** 未做（需 B/C 类）；
   `i18n.rs` 未开始；阶段 2 的配置窗口未启动。执行报告见 `docs/execution-report-2026-11-07.md`。
 
+---
+
+## 22. 阶段 1 收尾与阶段 2 起步（2026-11-07 22:05，提交 `abe09b6`）
+
+| 项 | 结果 |
+|---|---|
+| `i18n.rs` | GNU MO 读取器（326 行 / 7 测试）：magic 大小端、偏移表、单复数取第一形态、`Language:` header、`LANG` 收敛（去 `.UTF-8`/`@mod`，`C`/`POSIX` → 不翻译）、文件缺失回退原文 |
+| 真实 `.mo` 验证 | `msgfmt po/zh_CN.po -o /tmp/zh_CN.mo` + `NETWORKMGR_MO=... cargo test reads_a_real_catalog` 通过 |
+| `bin/config-window.rs` | 阶段 2 骨架（377 行 / 5 测试）：接口下拉、IPv4/IPv6 双标签、DHCP/Manual 与 SLAAC/Manual 切换、逐字段校验、生成 `rc.conf` 行与 `resolv.conf` 预览；**不写盘、不重启接口** |
+| GUI → core 依赖 | `rust/spikes` 新增 `networkmgr-core = { path = ".." }`，阶段 2 起界面直接复用校验与配置生成，不再重复实现规则 |
+| CI 产物 | 扩为四个二进制：`eframe-window`、`tray-status`、`config-window`、`dump-state`；core 与 spikes 各用独立 `CARGO_TARGET_DIR`，避免 rsync 回传构建缓存 |
+| 测试 | core **65 passed**、spikes **6 passed**；`cargo fmt --check` 干净 |
+
+**两个必须记住的坑**：
+
+1. **`fuzzy` 条目不会进 `.mo`**。当前分支 `po/zh_CN.po` 仍是旧版（16 译 / 9 fuzzy / 24 未译），所以 49 条里能翻到的只有 16 条。修复在 PR #133 的另一条分支，合并后重新 `msgfmt` 即可，读取器无需改动。因此真实 `.mo` 测试只断言「至少有一条译文」，不写死具体措辞，否则会锁死旧错译。
+2. **`msgid`/`msgstr` 表的偏移不是逐条累加**。布局是「全部 msgid 连续放，再放全部 msgstr」，译串起点必须用所有 msgid 的总长；按循环内已累积长度算会让第一条之后全部错位——本轮的测试夹具第一版就在这上面翻过车。
+
+### `dump-state` 实机比对（B 类，已完成）
+
+- CI run `42379533273` 产出四个二进制，其中 `dump-state`（546 KB）scp 进 `freebsd15` VM 直接运行。
+- Rust 输出：
+  `{"card":"vtnet0","kind":"wire","connection":"Connected","ssid":null,"signal":null,"tooltip":"inet 192.168.122.170 netmask 255.255.255.0 broadcast 192.168.122.255"}`
+- 同一时刻采集 VM 的 `netstat -rn` 与 `ifconfig vtnet0`，在本机用 Python `tray_state()`（mock 命令）复算，
+  `json.dumps(separators=(',',':'))` 的结果与 Rust 输出**逐字节相同**。
+- 这满足了阶段 1 的验收条件「同一台机器、同一网络状态下两份 JSON 一致」。**但只覆盖有线连通状态**：
+  无线 `wlan0` 分支仍受 VM 无无线网卡限制，第 9 节 P0 风险不变。
+
+
 
 

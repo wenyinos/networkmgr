@@ -30,18 +30,45 @@
     "id": "t4",
     "title": "实现 i18n：纯 Rust .mo 读取器",
     "type": "构建",
-    "status": "todo",
-    "deliverable": "rust/src/i18n.rs",
-    "criteria": "能读出简中 .mo，缺文件回退原文",
+    "status": "done",
+    "deliverable": "rust/src/i18n.rs（326 行，7 个测试）",
+    "criteria": "msgfmt 编译的真实 zh_CN.mo 端到端读取通过",
     "report": "execution-report-2026-11-07.md"
   },
   {
     "id": "t5",
-    "title": "写执行报告、更新方案文档、生成看板并提交",
+    "title": "dump-state 纳入 CI 产物并在 FreeBSD 15 VM 实机比对",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "workflow 四产物；VM 实跑输出",
+    "criteria": "与 Python 版在同一份 FreeBSD 输入上逐字节一致",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t6",
+    "title": "阶段 2 起步：eframe 配置窗口骨架",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "rust/spikes/src/bin/config-window.rs（377 行，5 个测试）",
+    "criteria": "IPv4/IPv6 双标签 + 校验 + rc.conf/resolv.conf 预览，不写盘",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t7",
+    "title": "更新方案第 21/22 节、README 与执行报告",
     "type": "写作",
     "status": "done",
-    "deliverable": "docs/execution-report-2026-11-07.md、方案第 21 节、kanban-2026-11-07.html",
-    "criteria": "报告四段齐全；提交推送成功",
+    "deliverable": "docs/RUST_REWRITE_PLAN.md、README.md、本报告",
+    "criteria": "记录测试数、两个 MO 坑、实机比对结果",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t8",
+    "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
+    "type": "分析",
+    "status": "todo",
+    "deliverable": "X200-BSD 或 GhostBSD 实机记录",
+    "criteria": "真实 wpa_cli 样本 + 无线连接全流程走通",
     "report": "execution-report-2026-11-07.md"
   }
 ]

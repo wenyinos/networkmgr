@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NetworkMgr Rust 阶段 1 任务看板</title>
+<title>NetworkMgr Rust 重写任务看板</title>
 <style>
   :root { --bg:#f5f6f8; --card:#ffffff; --line:#e5e7eb; --text:#1f2328; --muted:#6b7280; }
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -13,7 +13,7 @@
   .sub { color:var(--muted); font-size:13px; margin-bottom:8px; }
   .progress { display:flex; align-items:center; gap:10px; margin:12px 0 20px; }
   .bar { flex:1; height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; }
-  .fill { height:100%; background:#34a853; width:80.0%; transition:width .3s; }
+  .fill { height:100%; background:#34a853; width:87.5%; transition:width .3s; }
   .pct { font-size:13px; color:var(--muted); white-space:nowrap; }
   .board { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
   @media (max-width:760px) { .board { grid-template-columns:1fr; } }
@@ -35,20 +35,20 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>NetworkMgr Rust 阶段 1 任务看板</h1>
-  <div class="sub">2026-11-07 · 共 5 个任务 · 已完成 4 个</div>
+  <h1>NetworkMgr Rust 重写任务看板</h1>
+  <div class="sub">2026-11-07 · 共 8 个任务 · 已完成 7 个</div>
   <div class="progress">
     <div class="bar"><div class="fill"></div></div>
-    <span class="pct">80%</span>
+    <span class="pct">88%</span>
   </div>
   <div class="board"><div class="col"><div class="col-head"><span class="dot" style="background:#9aa0a6"></span>待办<span class="count">1</span></div><div class="card">
-<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#9aa0a6;border-color:#9aa0a6">待办</span></div>
-<div class="card-title">实现 i18n：纯 Rust .mo 读取器</div>
-<div class="kv"><span class="k">预计产出</span><span class="v">rust/src/i18n.rs</span></div>
-<div class="kv"><span class="k">完成标准</span><span class="v">能读出简中 .mo，缺文件回退原文</span></div>
+<div class="card-head"><span class="tag" style="background:#f472b6">分析</span><span class="status" style="color:#9aa0a6;border-color:#9aa0a6">待办</span></div>
+<div class="card-title">C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">X200-BSD 或 GhostBSD 实机记录</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">真实 wpa_cli 样本 + 无线连接全流程走通</span></div>
 </div></div>
 <div class="col"><div class="col-head"><span class="dot" style="background:#e8a33d"></span>进行中<span class="count">0</span></div></div>
-<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">4</span></div><div class="card">
+<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">7</span></div><div class="card">
 <div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
 <div class="card-title">移植 config：rc.conf 安全写值、resolv.conf、PSK/WEP/Open/EAP 字段</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">rust/src/config.rs（592 行，13 个测试）</span></div>
@@ -67,10 +67,28 @@
 <div class="kv"><span class="k">完成标准</span><span class="v">5 种状态 JSON 与 Python json.dumps 逐字节相同</span></div>
 </div>
 <div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">实现 i18n：纯 Rust .mo 读取器</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">rust/src/i18n.rs（326 行，7 个测试）</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">msgfmt 编译的真实 zh_CN.mo 端到端读取通过</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">dump-state 纳入 CI 产物并在 FreeBSD 15 VM 实机比对</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">workflow 四产物；VM 实跑输出</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">与 Python 版在同一份 FreeBSD 输入上逐字节一致</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">阶段 2 起步：eframe 配置窗口骨架</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">rust/spikes/src/bin/config-window.rs（377 行，5 个测试）</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">IPv4/IPv6 双标签 + 校验 + rc.conf/resolv.conf 预览，不写盘</span></div>
+</div>
+<div class="card">
 <div class="card-head"><span class="tag" style="background:#8b5cf6">写作</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
-<div class="card-title">写执行报告、更新方案文档、生成看板并提交</div>
-<div class="kv"><span class="k">预计产出</span><span class="v">docs/execution-report-2026-11-07.md、方案第 21 节、kanban-2026-11-07.html</span></div>
-<div class="kv"><span class="k">完成标准</span><span class="v">报告四段齐全；提交推送成功</span></div>
+<div class="card-title">更新方案第 21/22 节、README 与执行报告</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">docs/RUST_REWRITE_PLAN.md、README.md、本报告</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">记录测试数、两个 MO 坑、实机比对结果</span></div>
 </div></div></div>
   <div class="footer">由 goal-driven-autonomous-agent 生成。详细结果见执行报告。</div>
 </div>
