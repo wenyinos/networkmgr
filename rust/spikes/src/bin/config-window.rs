@@ -1,16 +1,181 @@
-//! 阶段 2 骨架：`networkmgr_configuration` 的 eframe 配置窗口。
+//! 阶段 2：`networkmgr_configuration` 的 eframe 配置窗口。
 //!
-//! 只做校验与预览，**不写盘、不重启接口**——写盘那一步在阶段 2 完成时再接
-//! `sysrc` / `resolv.conf`，本轮先把「界面 + 校验 + 生成内容」跑通，确保
-//! IPv4/IPv6 双标签、DHCP/静态切换与校验提示的形状是对的。
+//! 视觉参考 COSMIC / iced 设计系统：左侧导航（选中项为胶囊）、右侧卡片式表单、
+//! 明暗两套主题一键切换。配色取自参考图的实际像素，不是凭感觉调的。
 //!
-//! `SPIKE_SECONDS` 到点自动关闭，便于无人值守截图。
+//! 功能边界没变：默认只做校验与预览，`--apply` 才真的写 `rc.conf` 与
+//! `/etc/resolv.conf`；不重启接口。`SPIKE_SECONDS` 到点自动关闭。
 
 use std::time::{Duration, Instant};
 
 use eframe::egui;
+use egui::{Color32, CornerRadius, Margin, RichText, Stroke};
 use networkmgr_core::sys::{RealRunner, Sys};
 use networkmgr_core::{config, validate};
+
+// ---------------------------------------------------------------- 主题
+
+/// 一套配色。取自参考图：明色选中 `#006CA0`，暗色选中 `#69E4E3`。
+struct Theme {
+    is_dark: bool,
+    window: Color32,
+    sidebar: Color32,
+    card: Color32,
+    card_hover: Color32,
+    text: Color32,
+    muted: Color32,
+    accent: Color32,
+    accent_text: Color32,
+    secondary: Color32,
+    secondary_text: Color32,
+    positive: Color32,
+    destructive: Color32,
+    border: Color32,
+}
+
+impl Theme {
+    fn light() -> Self {
+        Self {
+            is_dark: false,
+            window: Color32::from_rgb(235, 235, 235),
+            sidebar: Color32::from_rgb(247, 247, 247),
+            card: Color32::from_rgb(250, 250, 250),
+            card_hover: Color32::from_rgb(240, 240, 240),
+            text: Color32::from_rgb(28, 28, 28),
+            muted: Color32::from_rgb(110, 110, 110),
+            accent: Color32::from_rgb(0, 108, 160),
+            accent_text: Color32::from_rgb(255, 255, 255),
+            secondary: Color32::from_rgb(216, 216, 216),
+            secondary_text: Color32::from_rgb(40, 40, 40),
+            positive: Color32::from_rgb(56, 110, 60),
+            destructive: Color32::from_rgb(168, 45, 52),
+            border: Color32::from_rgb(220, 220, 220),
+        }
+    }
+
+    fn dark() -> Self {
+        Self {
+            is_dark: true,
+            window: Color32::from_rgb(24, 24, 24),
+            sidebar: Color32::from_rgb(40, 40, 40),
+            card: Color32::from_rgb(43, 43, 43),
+            card_hover: Color32::from_rgb(55, 55, 55),
+            text: Color32::from_rgb(232, 232, 232),
+            muted: Color32::from_rgb(150, 150, 150),
+            accent: Color32::from_rgb(105, 228, 227),
+            accent_text: Color32::from_rgb(16, 16, 16),
+            secondary: Color32::from_rgb(90, 90, 90),
+            secondary_text: Color32::from_rgb(235, 235, 235),
+            positive: Color32::from_rgb(172, 227, 199),
+            destructive: Color32::from_rgb(244, 178, 178),
+            border: Color32::from_rgb(58, 58, 58),
+        }
+    }
+
+    fn for_mode(dark: bool) -> Self {
+        if dark {
+            Self::dark()
+        } else {
+            Self::light()
+        }
+    }
+}
+
+fn apply_visuals(ctx: &egui::Context, theme: &Theme) {
+    let mut visuals = if theme.is_dark {
+        egui::Visuals::dark()
+    } else {
+        egui::Visuals::light()
+    };
+    visuals.panel_fill = theme.window;
+    visuals.window_fill = theme.card;
+    visuals.extreme_bg_color = theme.sidebar;
+    visuals.override_text_color = Some(theme.text);
+    visuals.selection.bg_fill = theme.accent;
+    visuals.selection.stroke = Stroke::new(1.0, theme.accent_text);
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, theme.border);
+    visuals.widgets.inactive.bg_fill = theme.secondary;
+    visuals.widgets.inactive.weak_bg_fill = theme.secondary;
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, theme.secondary_text);
+    visuals.widgets.hovered.weak_bg_fill = theme.card_hover;
+    visuals.widgets.active.weak_bg_fill = theme.accent;
+    ctx.set_visuals(visuals);
+}
+
+// ---------------------------------------------------------------- 组件
+
+/// 卡片容器：圆角、卡片底色、内边距 16。
+fn card(theme: &Theme) -> egui::Frame {
+    egui::Frame::NONE
+        .fill(theme.card)
+        .corner_radius(CornerRadius::same(12))
+        .inner_margin(Margin::same(16))
+}
+
+/// 分区小标题，对应参考图里的 `Debug` / `Buttons` / `Controls`。
+fn section(ui: &mut egui::Ui, theme: &Theme, text: &str) {
+    ui.label(RichText::new(text).size(14.0).strong().color(theme.text));
+}
+
+/// 胶囊按钮：选中时填充主色，未选中时透明。
+fn pill(ui: &mut egui::Ui, theme: &Theme, text: &str, selected: bool) -> egui::Response {
+    let (fill, color) = if selected {
+        (theme.accent, theme.accent_text)
+    } else {
+        (Color32::TRANSPARENT, theme.text)
+    };
+    ui.add(
+        egui::Button::new(RichText::new(text).color(color))
+            .fill(fill)
+            .corner_radius(16.0)
+            .min_size(egui::vec2(96.0, 32.0)),
+    )
+}
+
+/// 主按钮：主色填充。
+fn primary_button(ui: &mut egui::Ui, theme: &Theme, text: &str) -> egui::Response {
+    ui.add(
+        egui::Button::new(RichText::new(text).color(theme.accent_text))
+            .fill(theme.accent)
+            .corner_radius(16.0)
+            .min_size(egui::vec2(110.0, 34.0)),
+    )
+}
+
+/// 次按钮：灰色填充。
+fn secondary_button(ui: &mut egui::Ui, theme: &Theme, text: &str) -> egui::Response {
+    ui.add(
+        egui::Button::new(RichText::new(text).color(theme.secondary_text))
+            .fill(theme.secondary)
+            .corner_radius(16.0)
+            .min_size(egui::vec2(96.0, 34.0)),
+    )
+}
+
+/// 左侧导航项：选中时整行胶囊。
+fn nav_item(ui: &mut egui::Ui, theme: &Theme, icon: &str, text: &str, selected: bool) -> bool {
+    let (fill, color) = if selected {
+        (theme.accent, theme.accent_text)
+    } else {
+        (Color32::TRANSPARENT, theme.text)
+    };
+    let response = ui.add(
+        egui::Button::new(RichText::new(format!("{icon}  {text}")).color(color))
+            .fill(fill)
+            .corner_radius(18.0)
+            .min_size(egui::vec2(212.0, 36.0)),
+    );
+    response.clicked()
+}
+
+// ---------------------------------------------------------------- 状态
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum Nav {
+    Wifi,
+    Desktop,
+    Upgrade,
+}
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Tab {
@@ -33,6 +198,8 @@ enum Method6 {
 struct ConfigWindow {
     started: Instant,
     limit: Option<Duration>,
+    dark: bool,
+    nav: Nav,
     tab: Tab,
     interfaces: Vec<String>,
     selected: usize,
@@ -49,11 +216,8 @@ struct ConfigWindow {
     gateway6: String,
     preview: String,
     errors: Vec<String>,
-    /// 是否真的写盘。默认 false，只有 `--apply` 才执行；骨架阶段先保证预览可用。
     apply_for_real: bool,
-    /// 待写入的 `rc.conf` 变量。
     commands: Vec<(String, String)>,
-    /// 待整份改写的 `resolv.conf` 内容。
     resolv: Option<String>,
     status: String,
     runner: RealRunner,
@@ -64,6 +228,8 @@ impl Default for ConfigWindow {
         Self {
             started: Instant::now(),
             limit: None,
+            dark: false,
+            nav: Nav::Wifi,
             tab: Tab::Ipv4,
             interfaces: vec!["em0".to_string(), "wlan0".to_string(), "em0.10".to_string()],
             selected: 0,
@@ -90,7 +256,6 @@ impl Default for ConfigWindow {
 }
 
 impl ConfigWindow {
-    /// 校验当前输入并生成将要写入的 `rc.conf` 行与 `resolv.conf` 内容。
     fn apply(&mut self) {
         self.errors.clear();
         self.commands.clear();
@@ -223,7 +388,6 @@ impl ConfigWindow {
         self.status = format!("Applied {} rc.conf entries", self.commands.len());
     }
 
-    /// 校验一个字段：成功取值，失败记录错误并返回 None。
     fn check(&mut self, result: Result<String, String>) -> Option<String> {
         match result {
             Ok(value) => Some(value),
@@ -233,112 +397,289 @@ impl ConfigWindow {
             }
         }
     }
-}
 
-impl eframe::App for ConfigWindow {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.heading("NetworkMgr configuration (stage 2 skeleton)");
+    fn body(&mut self, ui: &mut egui::Ui, theme: &Theme) {
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Wi-Fi").size(22.0).strong().color(theme.text));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if self.apply_for_real {
+                    if primary_button(ui, theme, "Apply").clicked() {
+                        self.apply();
+                    }
+                } else if secondary_button(ui, theme, "Preview").clicked() {
+                    self.apply();
+                }
+            });
+        });
+        ui.label(
+            RichText::new("Pick an interface, then choose how it gets its address.")
+                .size(12.0)
+                .color(theme.muted),
+        );
+        ui.add_space(12.0);
+
+        card(theme).show(ui, |ui| {
+            section(ui, theme, "Interface");
+            ui.add_space(6.0);
             ui.horizontal(|ui| {
-                ui.label("Interface:");
                 let current = self.interfaces[self.selected].clone();
                 egui::ComboBox::from_id_salt("nic")
                     .selected_text(current)
+                    .width(180.0)
                     .show_ui(ui, |ui| {
                         for (index, name) in self.interfaces.iter().enumerate() {
                             ui.selectable_value(&mut self.selected, index, name);
                         }
                     });
-                let label = if self.apply_for_real {
-                    "Apply"
-                } else {
-                    "Validate & preview"
-                };
-                if ui.button(label).clicked() {
-                    self.apply();
+                ui.add_space(12.0);
+                if pill(ui, theme, "IPv4", self.tab == Tab::Ipv4).clicked() {
+                    self.tab = Tab::Ipv4;
+                }
+                if pill(ui, theme, "IPv6", self.tab == Tab::Ipv6).clicked() {
+                    self.tab = Tab::Ipv6;
                 }
             });
+        });
 
-            ui.separator();
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.tab, Tab::Ipv4, "IPv4");
-                ui.selectable_value(&mut self.tab, Tab::Ipv6, "IPv6");
-            });
-
-            match self.tab {
-                Tab::Ipv4 => {
-                    ui.horizontal(|ui| {
-                        ui.radio_value(&mut self.method4, Method4::Dhcp, "DHCP");
-                        ui.radio_value(&mut self.method4, Method4::Manual, "Manual");
-                    });
-                    if self.method4 == Method4::Manual {
-                        egui::Grid::new("ipv4").num_columns(2).show(ui, |ui| {
-                            ui.label("IP address");
-                            ui.text_edit_singleline(&mut self.ip);
-                            ui.end_row();
-                            ui.label("Subnet mask");
-                            ui.text_edit_singleline(&mut self.netmask);
-                            ui.end_row();
-                            ui.label("Default gateway");
-                            ui.text_edit_singleline(&mut self.gateway);
-                            ui.end_row();
-                            ui.label("DNS server 1");
-                            ui.text_edit_singleline(&mut self.dns1);
-                            ui.end_row();
-                            ui.label("DNS server 2");
-                            ui.text_edit_singleline(&mut self.dns2);
-                            ui.end_row();
-                            ui.label("Search domain");
-                            ui.text_edit_singleline(&mut self.search);
-                            ui.end_row();
-                        });
+        ui.add_space(12.0);
+        card(theme).show(ui, |ui| match self.tab {
+            Tab::Ipv4 => {
+                section(ui, theme, "IPv4");
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if pill(ui, theme, "DHCP", self.method4 == Method4::Dhcp).clicked() {
+                        self.method4 = Method4::Dhcp;
                     }
-                }
-                Tab::Ipv6 => {
-                    ui.horizontal(|ui| {
-                        ui.radio_value(&mut self.method6, Method6::Slaac, "SLAAC");
-                        ui.radio_value(&mut self.method6, Method6::Manual, "Manual");
-                    });
-                    if self.method6 == Method6::Manual {
-                        egui::Grid::new("ipv6").num_columns(2).show(ui, |ui| {
-                            ui.label("IPv6 address");
-                            ui.text_edit_singleline(&mut self.ip6);
-                            ui.end_row();
-                            ui.label("Prefix length");
-                            ui.text_edit_singleline(&mut self.prefix6);
-                            ui.end_row();
-                            ui.label("Default gateway");
-                            ui.text_edit_singleline(&mut self.gateway6);
-                            ui.end_row();
-                        });
+                    if pill(ui, theme, "Manual", self.method4 == Method4::Manual).clicked() {
+                        self.method4 = Method4::Manual;
                     }
-                }
-            }
-
-            ui.separator();
-            for error in &self.errors {
-                ui.colored_label(egui::Color32::from_rgb(200, 60, 60), error);
-            }
-            if !self.status.is_empty() {
-                ui.colored_label(egui::Color32::from_rgb(40, 140, 90), &self.status);
-            }
-            if !self.preview.is_empty() {
-                ui.label(if self.apply_for_real {
-                    "Will write:"
-                } else {
-                    "Would write (dry run, pass --apply to write):"
                 });
-                ui.monospace(&self.preview);
+                if self.method4 == Method4::Manual {
+                    ui.add_space(10.0);
+                    egui::Grid::new("ipv4")
+                        .num_columns(2)
+                        .spacing([18.0, 10.0])
+                        .show(ui, |ui| {
+                            field(ui, theme, "IP address", &mut self.ip);
+                            field(ui, theme, "Subnet mask", &mut self.netmask);
+                            field(ui, theme, "Default gateway", &mut self.gateway);
+                            field(ui, theme, "DNS server 1", &mut self.dns1);
+                            field(ui, theme, "DNS server 2", &mut self.dns2);
+                            field(ui, theme, "Search domain", &mut self.search);
+                        });
+                }
             }
+            Tab::Ipv6 => {
+                section(ui, theme, "IPv6");
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if pill(ui, theme, "SLAAC", self.method6 == Method6::Slaac).clicked() {
+                        self.method6 = Method6::Slaac;
+                    }
+                    if pill(ui, theme, "Manual", self.method6 == Method6::Manual).clicked() {
+                        self.method6 = Method6::Manual;
+                    }
+                });
+                if self.method6 == Method6::Manual {
+                    ui.add_space(10.0);
+                    egui::Grid::new("ipv6")
+                        .num_columns(2)
+                        .spacing([18.0, 10.0])
+                        .show(ui, |ui| {
+                            field(ui, theme, "IPv6 address", &mut self.ip6);
+                            field(ui, theme, "Prefix length", &mut self.prefix6);
+                            field(ui, theme, "Default gateway", &mut self.gateway6);
+                        });
+                }
+            }
+        });
 
-            if self
-                .limit
-                .is_some_and(|limit| self.started.elapsed() >= limit)
-            {
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        if !self.errors.is_empty() {
+            ui.add_space(12.0);
+            card(theme).show(ui, |ui| {
+                section(ui, theme, "Validation");
+                ui.add_space(4.0);
+                for error in &self.errors {
+                    ui.label(RichText::new(error).color(theme.destructive).size(12.0));
+                }
+            });
+        }
+
+        if !self.preview.is_empty() {
+            ui.add_space(12.0);
+            card(theme).show(ui, |ui| {
+                section(ui, theme, "Preview");
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new(if self.apply_for_real {
+                        "Will write:"
+                    } else {
+                        "Dry run (pass --apply to write):"
+                    })
+                    .size(11.0)
+                    .color(theme.muted),
+                );
+                ui.add_space(4.0);
+                ui.label(RichText::new(&self.preview).monospace().size(12.0));
+            });
+        }
+
+        if !self.status.is_empty() {
+            ui.add_space(12.0);
+            let color = if self.status.starts_with("FAILED") {
+                theme.destructive
+            } else {
+                theme.positive
+            };
+            ui.label(RichText::new(&self.status).color(color).size(12.0));
+        }
+
+        if self
+            .limit
+            .is_some_and(|limit| self.started.elapsed() >= limit)
+        {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+}
+
+/// 表单一行：左侧标签、右侧输入框。
+fn field(ui: &mut egui::Ui, theme: &Theme, label: &str, value: &mut String) {
+    ui.label(RichText::new(label).size(13.0).color(theme.text));
+    ui.add(egui::TextEdit::singleline(value).desired_width(240.0));
+    ui.end_row();
+}
+
+fn placeholder(ui: &mut egui::Ui, theme: &Theme, title: &str, body: &str) {
+    ui.add_space(4.0);
+    ui.label(RichText::new(title).size(22.0).strong().color(theme.text));
+    ui.add_space(12.0);
+    card(theme).show(ui, |ui| {
+        ui.label(RichText::new(body).size(13.0).color(theme.muted));
+    });
+}
+
+impl ConfigWindow {
+    fn sidebar_contents(&mut self, ui: &mut egui::Ui, theme: &Theme) {
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new("NetworkMgr")
+                .size(17.0)
+                .strong()
+                .color(theme.text),
+        );
+        ui.label(
+            RichText::new("System network configuration")
+                .size(11.0)
+                .color(theme.muted),
+        );
+        ui.add_space(14.0);
+
+        if nav_item(ui, theme, "📶", "Wi-Fi", self.nav == Nav::Wifi) {
+            self.nav = Nav::Wifi;
+        }
+        ui.add_space(4.0);
+        if nav_item(ui, theme, "🖥", "Desktop", self.nav == Nav::Desktop) {
+            self.nav = Nav::Desktop;
+        }
+        ui.add_space(4.0);
+        if nav_item(
+            ui,
+            theme,
+            "🧩",
+            "OS Upgrade & Recovery",
+            self.nav == Nav::Upgrade,
+        ) {
+            self.nav = Nav::Upgrade;
+        }
+
+        ui.add_space(18.0);
+        ui.label(RichText::new("Theme").size(12.0).color(theme.muted));
+        ui.horizontal(|ui| {
+            if pill(ui, theme, "Light", !self.dark).clicked() {
+                self.dark = false;
+            }
+            if pill(ui, theme, "Dark", self.dark).clicked() {
+                self.dark = true;
             }
         });
     }
+}
+
+impl eframe::App for ConfigWindow {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let theme = Theme::for_mode(self.dark);
+        apply_visuals(ui.ctx(), &theme);
+
+        // egui 0.37 把 SidePanel 并进了 Panel 且不再提供固定宽度方法，
+        // 所以两栏背景自己画，尺寸完全可控，也更贴近参考图。
+        let full = ui.max_rect();
+        let sidebar_width = 252.0;
+        let sidebar_rect =
+            egui::Rect::from_min_size(full.min, egui::vec2(sidebar_width, full.height()));
+        let body_rect =
+            egui::Rect::from_min_max(egui::pos2(full.min.x + sidebar_width, full.min.y), full.max);
+
+        ui.painter().rect_filled(full, 0.0, theme.window);
+        ui.painter().rect_filled(sidebar_rect, 0.0, theme.sidebar);
+
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(sidebar_rect.shrink2(egui::vec2(14.0, 12.0))),
+            |ui| self.sidebar_contents(ui, &theme),
+        );
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(body_rect.shrink2(egui::vec2(22.0, 16.0))),
+            |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| match self.nav {
+                    Nav::Wifi => self.body(ui, &theme),
+                    Nav::Desktop => placeholder(
+                        ui,
+                        &theme,
+                        "Desktop",
+                        "Desktop settings arrive with stage 3.",
+                    ),
+                    Nav::Upgrade => placeholder(
+                        ui,
+                        &theme,
+                        "OS Upgrade & Recovery",
+                        "Not part of NetworkMgr; kept to match the reference layout.",
+                    ),
+                });
+            },
+        );
+    }
+}
+
+fn main() -> eframe::Result<()> {
+    let limit = std::env::var("SPIKE_SECONDS")
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .map(Duration::from_secs);
+    let apply_for_real = std::env::args().any(|arg| arg == "--apply");
+    // 便于分别截图验收两套主题：NETWORKMGR_THEME=dark
+    let dark = std::env::var("NETWORKMGR_THEME")
+        .map(|value| value.eq_ignore_ascii_case("dark"))
+        .unwrap_or(false);
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([900.0, 640.0])
+            .with_title("NetworkMgr configuration"),
+        renderer: eframe::Renderer::Glow,
+        ..Default::default()
+    };
+    eframe::run_native(
+        "networkmgr-config-window",
+        options,
+        Box::new(move |_cc| {
+            Ok(Box::new(ConfigWindow {
+                limit,
+                apply_for_real,
+                dark,
+                ..Default::default()
+            }))
+        }),
+    )
 }
 
 #[cfg(test)]
@@ -411,32 +752,16 @@ mod tests {
             .contains("ifconfig_em0_ipv6=inet6 2001:db8::2 prefixlen 64"));
         assert!(window.preview.contains("ipv6_defaultrouter=fe80::1%em0"));
     }
-}
 
-fn main() -> eframe::Result<()> {
-    let limit = std::env::var("SPIKE_SECONDS")
-        .ok()
-        .and_then(|raw| raw.parse::<u64>().ok())
-        .map(Duration::from_secs);
-    // 默认只预览：写 /etc/rc.conf 与 /etc/resolv.conf 需要显式 --apply，
-    // 且真实运行时必须已经通过 `sudo networkmgr_configuration` 提权。
-    let apply_for_real = std::env::args().any(|arg| arg == "--apply");
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([520.0, 460.0])
-            .with_title("NetworkMgr configuration"),
-        renderer: eframe::Renderer::Glow,
-        ..Default::default()
-    };
-    eframe::run_native(
-        "networkmgr-config-window",
-        options,
-        Box::new(move |_cc| {
-            Ok(Box::new(ConfigWindow {
-                limit,
-                apply_for_real,
-                ..Default::default()
-            }))
-        }),
-    )
+    #[test]
+    fn themes_differ_in_accent_and_background() {
+        let light = Theme::light();
+        let dark = Theme::dark();
+        assert_ne!(light.accent, dark.accent);
+        assert_ne!(light.window, dark.window);
+        assert!(!light.is_dark);
+        assert!(dark.is_dark);
+        assert_eq!(Theme::for_mode(false).accent, light.accent);
+        assert_eq!(Theme::for_mode(true).accent, dark.accent);
+    }
 }
