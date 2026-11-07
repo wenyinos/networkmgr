@@ -759,6 +759,53 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - 未做：动态子菜单（已保存网络、扫描结果、WireGuard）、30 秒被动刷新、
   `netif restart` 闭环、C 类实机。
 
+---
+
+## 26. 阶段 3 动态菜单与阶段 2 闭环（2026-11-07 23:55，提交 `2b4608e`）
+
+### 阶段 3：动态子菜单 + 30 秒刷新
+
+- 托盘程序扩到 385 行，菜单结构：状态标题 → WireGuard 区 → 有线/无线区 →
+  `Saved Networks`（子菜单）→ `Connect to Network`（含 `Scan for Networks`）→
+  `Restart Networking` → `Close Network Manager`。
+- 菜单/图标/tooltip **只在主线程重建**：`TrayIcon` 内部是 `RefCell`，不能跨线程；
+  用 `gtk::glib::timeout_add_seconds_local(30, ...)`。动作映射放 `Arc<Mutex<HashMap>>`，
+  事件线程只负责执行命令。
+- `CommandOutput` 拆出 `error` 字段：`wg show` 的判活**只看 stderr** 里有没有
+  `Unable to connect ... Device not configured`，合并成一个流就判不出来。
+- `Sys` 新增：`wpa_list_networks` / `wpa_scan_results` / `wpa_scan` / `sysrc_get` /
+  `wg_connected` / `wg_configs` / `ifconfig_args`。
+- **仍未实现**（执行时只打印日志，不假装成功）：扫描结果的「连接」需要
+  add_network / set_network / select_network 整套流程；300 ms 帧动画；`Forget` 的 remove_network。
+
+### 阶段 2 闭环：写盘 → 重启 → 地址生效
+
+给 VM 热插第二块 virtio 网卡（`virsh attach-interface --live`，guest 出现 `vtnet1`），
+用 `apply-config` 写 `ifconfig_vtnet1=inet 10.99.0.2 netmask 255.255.255.0`，然后重启 VM：
+
+| 检查 | 结果 |
+|---|---|
+| `sysrc -n ifconfig_vtnet1` | `inet 10.99.0.2 netmask 255.255.255.0` |
+| 重启后 `ifconfig vtnet1` | **`inet 10.99.0.2 netmask 0xffffff00 broadcast 10.99.0.255`** —— 自动应用 |
+| 重启后 `ifconfig vtnet0` | 仍是 DHCP `192.168.122.170` |
+| SSH | 正常 |
+
+**危险发现**：`service netif restart` 之后 SSH **没有自动恢复**——连续 80 秒 `No route to host`，
+最后必须 `virsh reboot` 才回来。具体原因未定位（可能是无 DHCP 配置的 `vtnet1` 拖住 start 阶段，
+也可能是 `vtnet0` 的 dhclient 未重新取址），但现象明确。这意味着 Python 版菜单里的
+`Restart Networking` 在远端/单网卡场景是高危操作；Rust 版要么加前置确认，要么改成分接口重启。
+
+### 验证到什么程度
+
+- CI run `42387688795` 成功：`appindicator` 后端下动态菜单版本在 FreeBSD 15.1 上编译通过。
+- VM 上启动输出 `tray ready, state = {...}`，截图确认图标在位（`(210,210,210)` 中心 64 像素、
+  边框 `(70,70,70)` 384 像素）。
+- **菜单渲染与 30 秒刷新无法自动化断言**：libayatana 在 session bus 上没暴露可匹配的
+  `indicator`/`statusnotifier` 服务名，`gdbus GetLayout` 取不到布局；菜单项文本只能靠
+  代码审查 + 人工点击确认，刷新只能靠长时间运行观察。这条限制写在这里，避免以后把
+  "图标出现"误当成"菜单也验过了"。
+
+
 
 
 
