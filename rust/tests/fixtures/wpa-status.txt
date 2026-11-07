@@ -1,0 +1,7 @@
+Selected interface 'wlan0'
+wpa_state=COMPLETED
+ssid=\xe4\xb8\xad\xe6\x96\x87 Net
+bssid=00:11:22:33:44:55
+ip_address=192.0.2.77
+key_mgmt=WPA2-PSK
+id=0

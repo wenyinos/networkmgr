@@ -129,6 +129,124 @@ pub fn parse_key_values(text: &str) -> BTreeMap<String, String> {
     values
 }
 
+/// daemon 未上报噪声底时的兜底值，对应 Python `_noise_floor()` 的 `-95`。
+pub const DEFAULT_NOISE_FLOOR: i32 = -95;
+
+/// 一条已保存网络，对应 `wpa_cli list_networks` 的一行。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedNetwork {
+    pub id: String,
+    pub ssid: String,
+    pub bssid: String,
+    pub flags: String,
+}
+
+/// 一条扫描结果，字段与 Python `scan_networks()` 的记录一一对应。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanResult {
+    pub ssid: String,
+    pub bssid: String,
+    pub frequency: i32,
+    pub level: i32,
+    pub noise: i32,
+    pub signal: i32,
+    pub flags: String,
+    pub security: &'static str,
+    pub enterprise: bool,
+}
+
+/// 解析 `wpa_cli status`，并还原 SSID 的 printf 转义。
+///
+/// 只覆盖 Python `wpa_status()` 中拿到输出之后的部分；daemon 不可达时调用方
+/// 传空文本即可得到空表，与 Python 的 `{}` 行为一致。
+pub fn wpa_status(text: &str) -> BTreeMap<String, String> {
+    let mut values = parse_key_values(text);
+    if let Some(encoded) = values.get("ssid").cloned() {
+        values.insert("ssid".to_string(), printf_decode(&encoded));
+    }
+    values
+}
+
+/// 解析 `wpa_cli list_networks`：跳过表头、按 tab 分列、SSID 需 printf 解码。
+pub fn wpa_networks(text: &str) -> Vec<SavedNetwork> {
+    let mut networks = Vec::new();
+    for line in text.lines().skip(1) {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() > 3 {
+            networks.push(SavedNetwork {
+                id: fields[0].trim().to_string(),
+                ssid: printf_decode(fields[1]),
+                bssid: fields[2].to_string(),
+                flags: fields[3].to_string(),
+            });
+        }
+    }
+    networks
+}
+
+/// 信号强度百分比，沿用旧版 S:N 算术，**故意不 clamp**，以便沿用同一套图标分档。
+pub fn bar_percent(level: i32, noise: i32) -> i32 {
+    (level - noise) * 4
+}
+
+/// 从 `wpa_cli bss 0` 输出读取噪声底；读不到时调用方用 `DEFAULT_NOISE_FLOOR`。
+pub fn noise_floor(bss_output: &str) -> Option<i32> {
+    parse_key_values(bss_output)
+        .get("noise")?
+        .trim()
+        .parse::<i32>()
+        .ok()
+}
+
+/// 解析 `wpa_cli scan_results`。
+///
+/// 与 Python 版一致：跳过表头、忽略隐藏网络（空 SSID）、同 SSID 保留信号最强
+/// 的 AP、`security` 由 flags 推导、`enterprise` 由 `-EAP` 后缀判定。
+/// 唯一有意差异：数字字段解析失败时跳过该行，而非像 Python 那样抛未捕获异常。
+pub fn scan_networks(text: &str, noise: i32) -> BTreeMap<String, ScanResult> {
+    let mut networks = BTreeMap::new();
+    for line in text.lines().skip(1) {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() < 5 {
+            continue;
+        }
+        let ssid = printf_decode(fields[4]);
+        if ssid.is_empty() {
+            continue;
+        }
+        let Ok(level) = fields[2].trim().parse::<i32>() else {
+            continue;
+        };
+        let Ok(frequency) = fields[1].trim().parse::<i32>() else {
+            continue;
+        };
+        let signal = bar_percent(level, noise);
+        if networks
+            .get(&ssid)
+            .is_some_and(|existing: &ScanResult| existing.signal >= signal)
+        {
+            continue;
+        }
+        let flags = fields[3].to_string();
+        let security = security_from_flags(&flags);
+        networks.insert(
+            ssid.clone(),
+            ScanResult {
+                ssid,
+                bssid: fields[0].to_string(),
+                frequency,
+                level,
+                noise,
+                signal,
+                flags,
+                security,
+                enterprise: security.ends_with("-EAP"),
+            },
+        );
+    }
+    networks
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,6 +255,71 @@ mod tests {
     const NO_SOCKET: &str = include_str!("../tests/fixtures/wpa-cli-no-socket.txt");
     const CONF_STRUCTURE: &str =
         include_str!("../tests/fixtures/wpa-supplicant-conf-structure.txt");
+    // 标准 wpa_cli 输出格式的 mock 样本（不改动实体机，按方案 2 补齐）。
+    const STATUS: &str = include_str!("../tests/fixtures/wpa-status.txt");
+    const LIST_NETWORKS: &str = include_str!("../tests/fixtures/wpa-list-networks.txt");
+    const SCAN_RESULTS: &str = include_str!("../tests/fixtures/wpa-scan-results.txt");
+    const BSS_NOISE: &str = include_str!("../tests/fixtures/wpa-bss-noise.txt");
+
+    #[test]
+    fn status_decodes_ssid_and_ignores_banner() {
+        let status = wpa_status(STATUS);
+        assert_eq!(status.get("wpa_state").map(String::as_str), Some("COMPLETED"));
+        assert_eq!(status.get("ssid").map(String::as_str), Some("中文 Net"));
+        assert_eq!(status.get("bssid").map(String::as_str), Some("00:11:22:33:44:55"));
+        assert!(!status.contains_key("Selected interface 'wlan0'"));
+        assert!(wpa_status("").is_empty());
+    }
+
+    #[test]
+    fn list_networks_decodes_escaped_ssids() {
+        let networks = wpa_networks(LIST_NETWORKS);
+        assert_eq!(networks.len(), 3);
+        assert_eq!(networks[0].id, "0");
+        assert_eq!(networks[0].ssid, "ExampleNet");
+        assert_eq!(networks[0].flags, "[CURRENT]");
+        assert_eq!(networks[1].ssid, "中文 Net");
+        assert_eq!(networks[2].ssid, "a\"b\\c");
+    }
+
+    #[test]
+    fn scan_results_keep_strongest_ap_and_classify_security() {
+        let noise = noise_floor(BSS_NOISE).unwrap_or(DEFAULT_NOISE_FLOOR);
+        assert_eq!(noise, -95);
+        let networks = scan_networks(SCAN_RESULTS, noise);
+        assert_eq!(networks.len(), 5);
+        let home = &networks["ExampleNet"];
+        assert_eq!(home.bssid, "00:11:22:33:44:66");
+        assert_eq!(home.level, -35);
+        assert_eq!(home.signal, bar_percent(-35, -95));
+        assert_eq!(home.security, "WPA2-PSK");
+        assert!(!home.enterprise);
+        assert_eq!(networks["中文 Net"].security, "WPA2-PSK");
+        assert_eq!(networks["Corp-EAP"].security, "WPA2-EAP");
+        assert!(networks["Corp-EAP"].enterprise);
+        assert_eq!(networks["OldNet"].security, "WEP");
+        assert_eq!(networks["Guest"].security, "OPEN");
+    }
+
+    #[test]
+    fn scan_skips_hidden_networks_and_malformed_rows() {
+        let mock = concat!(
+            "bssid / frequency / signal level / flags / ssid\n",
+            "00:11:22:33:44:55\t2412\t-50\t[ESS]\t\n",
+            "00:11:22:33:44:56\t2412\tbad\t[ESS]\tBroken\n",
+            "00:11:22:33:44:57\t2412\t-50\t[ESS]\tOkay\n",
+        );
+        let networks = scan_networks(mock, -95);
+        assert_eq!(networks.len(), 1);
+        assert!(networks.contains_key("Okay"));
+    }
+
+    #[test]
+    fn bar_percent_is_deliberately_not_clamped() {
+        assert_eq!(bar_percent(-35, -95), 240);
+        assert_eq!(bar_percent(-95, -95), 0);
+        assert!(bar_percent(-10, -95) > 100);
+    }
 
     #[test]
     fn real_host_without_ctrl_interface_makes_wpa_cli_unusable() {

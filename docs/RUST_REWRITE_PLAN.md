@@ -535,5 +535,16 @@ Rust 侧把下列常量集中在 `sys.rs`，禁止各处硬编码；每个子进
 - FreeBSD 15.1-RELEASE-p6，接口 `em0` / `lo0` / `wlan0`，`wlan0` 已关联；`sudo -n` 免密，`/usr/sbin/wpa_cli` 存在。
 - **关键发现**：`wpa_supplicant` 在跑，但 `/etc/wpa_supplicant.conf` 里**没有 `ctrl_interface`**，`/var/run/wpa_supplicant/` 只有 `wlan0.pid`、没有控制 socket，因此 `wpa_cli status / list_networks / scan_results` 全部报 `Failed to connect to non-global ctrl_ifname: wlan0`。这类主机上原 Python 版 `wpa_cli()` 直接返回 `None`，Wi-Fi 管理功能整体不可用。
 - 项目模板 `src/wpa_supplicant.conf` 其实带 `ctrl_interface=/var/run/wpa_supplicant` 与 `ctrl_interface_group=operator`，`setup-nic.py` 的 `add_missing_settings()` 负责补齐；实体机是手工配置、未经过 NetworkMgr 部署才缺这几行。**模板的 `operator` 组与刚统一的 `%wheel` 又是一处组不一致**，若将来改成普通用户运行 GUI 会踩到，需一并核对。
-- 因此**仍缺 `wpa_cli` 的正常输出样本**。要采到必须先给实体机配置加 `ctrl_interface` 并重启 `wpa_supplicant`——远程机器有断网风险，未擅自执行，需要用户明确授权并安排在场操作。
+- 真实 `wpa_cli` 正常输出样本因此仍缺：要采到必须先给实体机配置加 `ctrl_interface` 并重启 `wpa_supplicant`——远程机器有断网风险，未擅自执行，需要用户明确授权并安排在场操作。**按用户选定的方案 2，解析层改用标准输出格式的 mock 样本覆盖（见下），全程不触碰实体机配置。**
 - 已安全入库的实体机样本（全部脱敏）：`ifconfig-wlan0.txt`、`wpa-cli-no-socket.txt`、`sysrc-wireless.txt`、`wpa-supplicant-conf-structure.txt`（密码等值全部打码）。`rust/src/ifconfig.rs` 新增无线状态解析并消费这些样本，`cargo test` **22 passed**。
+
+### 方案 2 落地：mock 样本补完 `wpa_cli` 解析（2026-11-07）
+
+用户拍板「不改动实体机、用标准 `wpa_cli` 输出格式写 mock 样本继续补完解析」。据此：
+
+- 新增 4 份 mock 样本到 `rust/tests/fixtures/`：`wpa-status.txt`、`wpa-list-networks.txt`、`wpa-scan-results.txt`、`wpa-bss-noise.txt`。覆盖中文 SSID 的 `\xHH` 转义、含引号/反斜杠的 SSID、隐藏网络（空 SSID）、畸形行、同 SSID 多 AP 取最强，以及 WPA2-PSK / WPA2-PSK+SAE / WPA2-EAP / WEP / OPEN 五类 flags。
+- `rust/src/wpa.rs` 新增 `SavedNetwork` / `ScanResult` 与 `wpa_status()` / `wpa_networks()` / `bar_percent()` / `noise_floor()` / `scan_networks()`，逐行对齐 `net_api.py`：tab 分列、跳过表头、`signal=(level-noise)*4` **不 clamp**、同 SSID 保留最强、`enterprise` 由 `-EAP` 后缀判定。
+- 两处有意差异（沿用既有移植策略）：数字字段或 `\xHH` 畸形时跳过该行 / 按字面保留，不 panic；Python 原版会抛未捕获异常。
+- 验证：`cargo test` **27 passed**（22 → 27）。另用 Python 原版 `net_api.wpa_status` / `wpa_networks` / `scan_networks` / `bar_percent`（`unittest.mock` 注入这 4 份样本）跑同一批断言，结果逐项一致，避免 Rust 测试自证。
+- **边界声明**：mock 只保证「给定输出 → 解析结果」的契约；daemon 可达性、控制 socket、扫描时序仍须 C 类实机验收。第 9 节 P0 风险（VM 无无线网卡）与 P1 风险（缺 `ctrl_interface`）**均未关闭**。
+- 已知项：crate 未按 `rustfmt` 统一格式，`cargo fmt --check` 在 `validate.rs` 等既有文件上同样报差异。为保持最小 diff，本轮不引入全仓格式化；要统一应单独起一次纯格式化提交。

@@ -1,0 +1,4 @@
+network id / ssid / bssid / flags
+0	ExampleNet	any	[CURRENT]
+1	\xe4\xb8\xad\xe6\x96\x87 Net	any	[DISABLED]
+2	a\"b\\c	any	[TEMP-DISABLED]

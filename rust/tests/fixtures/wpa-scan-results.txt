@@ -1,0 +1,7 @@
+bssid / frequency / signal level / flags / ssid
+00:11:22:33:44:55	2412	-45	[WPA2-PSK-CCMP][ESS]	ExampleNet
+00:11:22:33:44:66	2437	-35	[WPA2-PSK-CCMP][ESS]	ExampleNet
+66:77:88:99:aa:bb	5180	-72	[WPA2-PSK+SAE-CCMP][ESS]	\xe4\xb8\xad\xe6\x96\x87 Net
+cc:dd:ee:ff:00:11	2437	-60	[WPA2-EAP-CCMP][ESS]	Corp-EAP
+22:33:44:55:66:77	2462	-80	[WEP][ESS]	OldNet
+33:44:55:66:77:88	2412	-55	[ESS]	Guest
