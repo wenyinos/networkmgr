@@ -47,7 +47,7 @@ virsh -c qemu:///system net-dhcp-leases default      # 取 VM 当前 DHCP 地址
 ## 验收边界
 
 - **A｜本机 Fedora**：纯逻辑层契约测试、格式检查、GUI spike 编译与起窗预验证。
-- **B｜FreeBSD 15 VM**：CI 产物在 Xfce 下的窗口与托盘实跑、有线网络验收；VM 无无线网卡。
+- **B｜FreeBSD 15 VM**：CI 产物在 Xfce 下的窗口与托盘实跑**已通过**（方案第 20 节）；有线网络、静态 IP、devd 链路仍待验收，VM 无无线网卡。
 - **C｜实体机 / GhostBSD**：真实 Wi-Fi 扫描与连接、企业级 EAP、桌面集成与打包验收。
 
 VM 绿灯不等于验收完成；阶段 3 结束必须同时有 B 与 C 的记录。详见方案第 13 节。

@@ -310,7 +310,7 @@ Python 的 `gettext` 是**纯 Python 解析 `.mo`**，不链接系统 `libintl`�
 - [ ] **[A+B]** `wpa_supplicant.conf` 权限仍为 `0600 root:wheel`
 - [ ] **[B+C]** 30 秒刷新不导致界面卡顿；托盘线程崩溃不静默
 - [ ] **[B]** `cargo build --release` 在 guest 内原生构建通过（若上线 CI，再验远端 FreeBSD runner）
-- [ ] **[B]** 两个 spike 通过：eframe/glow 起窗、tray-icon 图标出现在 Xfce 面板
+- [x] **[B]** 两个 spike 通过：eframe/glow 起窗、tray-icon 图标出现在 Xfce 面板（2026-11-07 VM 实跑通过，见第 20 节）
 - [ ] **[B]** 回滚演练：把 desktop 的 `Exec` 改回 `networkmgr.py`，旧版可正常启动
 
 ---
@@ -616,5 +616,35 @@ virsh -c qemu:///system net-dhcp-leases default
 CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprecated` 注解（被强制运行在 Node 24），本次不影响结果；后续可单独升级到 `@v7` 并复跑。另有 `ubuntu-latest` 将迁移到 Ubuntu 26 的 runner 注解，与 FreeBSD guest 内的构建结果无关。
 
 **边界说明**：改的是 **fork** 的默认分支，**不是**把 Rust 版推成上游主线。Python 版仍是上游 `master` 的正式实现；fork 默认分支变化只影响克隆与该 fork 的 PR 默认行为，不改变上游发布流程，也不代表 Rust 版已可交付。第 9 节 P0 / P1 风险、实体机 `ctrl_interface` 缺失、真实 `wpa_cli` 样本缺口均维持原状。
+
+---
+
+## 20. B 类 VM 验收结果（2026-11-07 21:30，优先级高于前文）
+
+用第 18.4 节的 `deploy-to-vm.sh` 把 CI run `42375625920` 的两个 FreeBSD ELF 拷进 `freebsd15` VM 实跑。**两个 spike 均通过，第 10 节第 313 条已勾选。**
+
+### 环境与两处脚本修正
+
+- VM：FreeBSD **15.1-RELEASE-p6**（产物在 CI 的 15.1-RELEASE-p3 编译，跨 patchlevel 运行正常），Xfce / Xorg `:0`、llvmpipe（Mesa 26.2.2）、`wqy-fonts`、`gtk3-3.24.52`、`libayatana-appindicator-0.6.1`。
+- `deploy-to-vm.sh` 实跑时发现两处必需修正并已落地：
+  1. **认证**：新增 `ssh_cmd` / `scp_cmd` 包装，设置 `SSHPASS` 且本机有 `sshpass` 时自动走密码认证，否则仍用 SSH 密钥；脚本不保存密码。
+  2. **D-Bus session bus**：SSH 会话不继承桌面环境，而 AppIndicator 靠它与 Xfce 面板通信；脚本从 `~/.dbus/session-bus/<machine-id>-N` 读取并导出 `DBUS_SESSION_BUS_ADDRESS`。另外 XAUTHORITY 实际回退到 `~/.Xauthority`（lightdm 的 `/var/run/lightdm/root/` 普通用户不可读）。
+
+### 结果（均有日志与截图证据）
+
+| 项 | 结果 |
+|---|---|
+| spike ① eframe/glow | `SPIKE_SECONDS=5` 绘制 **2767 帧**后经 `ViewportCommand::Close` 正常退出，`exit=0`；20 秒复跑截图中窗口可见，中文「网络管理器」**无豆腐块**，`system_fonts` + `wqy-fonts` 生效 |
+| spike ② tray-icon | `appindicator` 后端图标创建成功，`exit=0`；**截图确认图标出现在 Xfce 顶部面板**（时间左侧蓝色方块，像素 RGB `(60,130,230)` 与 `icon_rgba()` 中心色完全一致），证明 D-Bus 与 systray 链路打通 |
+| 截图 | `xfce4-screenshooter -f -s`（1920×1080 PNG），本机留存于 `artifacts/vm-spike-validation.png`（该目录已 gitignore，不入库） |
+| 告警 | `libayatana-appindicator-WARNING: ... is deprecated. Please use libayatana-appindicator-glib`，不影响功能，记录为后续后端选型输入 |
+
+### 仍未关闭
+
+- 第 10 节其余 B 类项**未验**：有线网卡启停、静态 IPv4/IPv6 写 `rc.conf`、devd 三条链、7 语言 `.mo`、30 秒刷新与回滚演练。
+- 第 312 条「guest 内原生构建」按第 17 节决策已作废，由远端 FreeBSD CI 替代（run `42375625920` 成功）。
+- **C 类实机验收未做**：真实 Wi-Fi 扫描/连接、企业级 EAP、`ctrl_interface` 缺失主机、GhostBSD 桌面集成与 port 打包。
+- 本轮仍无可安装的网络管理二进制；VM 未装 rust/cargo，遵守第 17 节边界。P0 / P1 风险维持原状。
+
 
 
