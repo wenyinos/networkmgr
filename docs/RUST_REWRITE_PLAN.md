@@ -497,4 +497,33 @@ Rust 侧把下列常量集中在 `sys.rs`，禁止各处硬编码；每个子进
 ❓ **Q11** — **状态机、日志、回滚、Non-goals、ADR**：原方案缺连接取消、超时与错误策略、日志可观测性、并行安装细节、明确的"不做什么"和决策重审条件。是否一次性补齐？
 ➡️ **补齐**，见 15.1、15.2、15.5、15.6、15.7、15.8。
 
-**仍需用户/上游拍板、本轮未代为决定的**（这些答案依赖外部意见，不属于可自答的 frontier）：托盘菜单用原生 `muda` 是否可接受、是否要求零 GTK、devd 脚本是否一并 Rust 化、`openrc(8)` 声明的真实含义、`wheel` vs `operator`、版本号是否跳 8.0、以及何时把 `docs/rust-rewrite-plan` 推成 PR。
+**仍需用户/上游拍板、本轮未代为决定的**（这些答案依赖外部意见，不属于可自答的 frontier）：托盘菜单用原生 `muda` 是否可接受、是否要求零 GTK、devd 脚本是否一并 Rust 化、`openrc(8)` 声明的真实含义、`wheel` vs `operator`、版本号是否跳 8.0、以及何时把方案推成 PR。
+
+---
+
+## 17. 决策变更（2026-11-07 晚，优先级高于前文）
+
+用户随后确认的约束与设计选择，**覆盖前文中冲突的表述**：
+
+| 项 | 新决策 | 前文中作废的表述 |
+|---|---|---|
+| VM 角色 | 只装 **sudo 与运行依赖**，**不装 rust/cargo 等编译工具链**，仅用于运行验收 | 第 2 节表格「必须在 guest 内原生构建」、第 6 节阶段 0「VM 内 `pkg install rust`」、第 14 节步骤 2 与 4 |
+| 二进制来源 | **远端 FreeBSD CI / port 构建**，产物 scp 进 VM | 第 9 节「改为 guest 内原生构建」、第 10 节「`[B]` cargo build 在 guest 内」、第 11 节「可在 guest 内原生构建」、第 16 节 Q7 |
+| 本机职责 | 纯逻辑层开发 + 契约测试（Fedora 上 `cargo test`），**不做交叉编译** | 第 14 节「guest 内 cargo 配 rsproxy」 |
+| 分支 | `feat/rust-rewrite`（基于 `docs/rust-rewrite-plan`） | — |
+
+### 已实测的环境事实
+
+- VM `freebsd15` = FreeBSD **15.1-RELEASE-p6**，`192.168.122.170`（NAT DHCP，会变），root 可密码直连。
+- 已装：`gtk3-3.24.52`、`glib`、`mesa-dri/libs-26.2.2`、`libglvnd`、`fontconfig`、**`wqy-fonts`（CJK 字体）**、`dejavu`、`libdbusmenu`，以及本轮新增的 `sudo`、`mesa-demos`(glxinfo)、`libayatana-appindicator`。
+- Xfce 正在运行，`xfce4-panel` 已加载 systray 插件并标明支持「应用程序指示器」；Xorg 在 `:0`（lightdm），SSH 会话需显式带 `DISPLAY` / `XAUTHORITY`。
+- **GLX 实测可用**：`glxinfo -B`（`DISPLAY=:0` + lightdm XAUTHORITY）报 llvmpipe 软件渲染、OpenGL 4.6 core、`direct rendering: Yes`。spike ① 的 P0 风险因此降为 **P2（性能而非可用性）**，但仍需真实 eframe 窗口复验。
+- `zemin` 属 `wheel`；`operator` 组存在但 `zemin` 不在其中。原 sudoers 片段授权 `%operator`，而 README 要求 `wheel` —— **验收前需定一个**，否则免密提权不生效。
+- 只有 `vtnet0` / `lo0`，确认无无线网卡。
+- pkg 走 USTC 镜像（`mirrors.ustc.edu.cn`），`pkg update` 正常；首次 `pkg install` 因仓库同步被本地超时截断，但包实际已装好。
+
+### 本机已落地（`rust/`）
+
+- 零依赖 crate `networkmgr-core`，`cargo test` **16 passed**：`validate.rs` 全量移植 `validate.py`，`wpa.rs` 移植 printf 编解码、`security_from_flags` 与 `key=value` 解析。
+- 已用 Python 原版 `NetworkMgr.validate` / `net_api` 交叉核对全部关键断言，结果一致；含前导零 IPv4、主机掩码、中文 SSID 转义等边界用例。
+- 目录选 `rust/` 而非项目根，因为根目录已有 `src/`（Python 脚本与图标），不能混放。
