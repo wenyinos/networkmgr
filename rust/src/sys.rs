@@ -60,10 +60,14 @@ impl From<config::ConfigError> for SysError {
 impl std::error::Error for SysError {}
 
 /// 一条命令的结果。`success` 为 false 时调用方按原 Python 版的语义处理。
+///
+/// stdout 与 stderr 分开保存：`wg show` 的判活**只看 stderr** 里有没有
+/// `Unable to access interface: Device not configured`，合并成一个流就判不出来了。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandOutput {
     pub success: bool,
     pub text: String,
+    pub error: String,
 }
 
 impl CommandOutput {
@@ -71,6 +75,7 @@ impl CommandOutput {
         Self {
             success: true,
             text: text.into(),
+            error: String::new(),
         }
     }
 }
@@ -107,43 +112,52 @@ static TEMP_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 impl Runner for RealRunner {
     fn run(&self, program: &str, args: &[&str]) -> Result<CommandOutput, SysError> {
-        let path = std::env::temp_dir().join(format!(
-            "networkmgr-{}-{}.log",
+        let stamp = format!(
+            "{}-{}",
             std::process::id(),
             TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
-        ));
-        let file = File::create(&path).map_err(SysError::Spawn)?;
-        let stderr = file.try_clone().map_err(SysError::Spawn)?;
+        );
+        let out_path = std::env::temp_dir().join(format!("networkmgr-{stamp}.out"));
+        let err_path = std::env::temp_dir().join(format!("networkmgr-{stamp}.err"));
+        let out_file = File::create(&out_path).map_err(SysError::Spawn)?;
+        let err_file = File::create(&err_path).map_err(SysError::Spawn)?;
 
         let mut child = Command::new(program)
             .args(args)
             .stdin(Stdio::null())
-            .stdout(Stdio::from(file))
-            .stderr(Stdio::from(stderr))
+            .stdout(Stdio::from(out_file))
+            .stderr(Stdio::from(err_file))
             .spawn()
             .map_err(SysError::Spawn)?;
+
+        let cleanup = || {
+            let _ = fs::remove_file(&out_path);
+            let _ = fs::remove_file(&err_path);
+        };
 
         let deadline = Instant::now() + self.timeout;
         loop {
             match child.try_wait() {
                 Ok(Some(status)) => {
-                    let text = fs::read_to_string(&path).unwrap_or_default();
-                    let _ = fs::remove_file(&path);
+                    let text = fs::read_to_string(&out_path).unwrap_or_default();
+                    let error = fs::read_to_string(&err_path).unwrap_or_default();
+                    cleanup();
                     return Ok(CommandOutput {
                         success: status.success(),
                         text,
+                        error,
                     });
                 }
                 Ok(None) => {}
                 Err(error) => {
-                    let _ = fs::remove_file(&path);
+                    cleanup();
                     return Err(SysError::Spawn(error));
                 }
             }
             if Instant::now() >= deadline {
                 let _ = child.kill();
                 let _ = child.wait();
-                let _ = fs::remove_file(&path);
+                cleanup();
                 return Err(SysError::Timeout {
                     program: program.to_string(),
                     seconds: self.timeout.as_secs(),
@@ -175,6 +189,20 @@ impl FakeRunner {
             CommandOutput {
                 success,
                 text: text.to_string(),
+                error: String::new(),
+            },
+        );
+        self
+    }
+
+    /// 预置一条带 stderr 的响应，用于 `wg show` 这类要看错误输出的命令。
+    pub fn expect_with_error(mut self, command: &str, text: &str, error: &str) -> Self {
+        self.responses.insert(
+            command.to_string(),
+            CommandOutput {
+                success: false,
+                text: text.to_string(),
+                error: error.to_string(),
             },
         );
         self
@@ -242,6 +270,12 @@ impl<'a, R: Runner> Sys<'a, R> {
         self.text("netstat", &["-rn"])
     }
 
+    /// 执行 `ifconfig <args...>`，返回是否成功。
+    pub fn ifconfig_args(&self, args: &[&str]) -> bool {
+        self.run("ifconfig", args)
+            .is_some_and(|output| output.success)
+    }
+
     /// `wpa_cli -i <nic> status` 解析后的键值；daemon 不可达时为空表。
     pub fn wpa_status(&self, nic: &str) -> BTreeMap<String, String> {
         let text = self.text("wpa_cli", &["-i", nic, "status"]);
@@ -251,6 +285,55 @@ impl<'a, R: Runner> Sys<'a, R> {
     /// `wpa_cli -i <nic> bss current` 的原始输出。
     pub fn wpa_bss_current(&self, nic: &str) -> String {
         self.text("wpa_cli", &["-i", nic, "bss", "current"])
+    }
+
+    /// `wpa_cli -i <nic> list_networks` 的原始输出。
+    pub fn wpa_list_networks(&self, nic: &str) -> String {
+        self.text("wpa_cli", &["-i", nic, "list_networks"])
+    }
+
+    /// `wpa_cli -i <nic> scan_results` 的原始输出。
+    pub fn wpa_scan_results(&self, nic: &str) -> String {
+        self.text("wpa_cli", &["-i", nic, "scan_results"])
+    }
+
+    /// 触发一次扫描；`wpa_cli` 返回 OK 才算成功。
+    pub fn wpa_scan(&self, nic: &str) -> bool {
+        self.run("wpa_cli", &["-i", nic, "scan"])
+            .is_some_and(|output| output.success && !output.text.contains("FAIL"))
+    }
+
+    /// `sysrc -n <name>`，变量没设过时返回空串。
+    pub fn sysrc_get(&self, name: &str) -> String {
+        self.text("sysrc", &["-n", name])
+    }
+
+    /// `wg show <device>` 判活：stdout 空且 stderr 报设备未配置才算断开。
+    pub fn wg_connected(&self, device: &str) -> bool {
+        match self.runner.run("wg", &["show", device]) {
+            Ok(output) => crate::wg::status(&output.text, &output.error, false) == "Connected",
+            Err(_) => false,
+        }
+    }
+
+    /// 读取 WireGuard 配置目录，返回 `(文件名, 内容, 是否在运行)`，按文件名排序。
+    pub fn wg_configs(&self, dir: &std::path::Path) -> Vec<(String, String, bool)> {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = entries
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+            .into_iter()
+            .filter_map(|name| {
+                let content = fs::read_to_string(dir.join(&name)).ok()?;
+                let device = crate::wg::device_name(&name);
+                Some((name, content, self.wg_connected(&device)))
+            })
+            .collect()
     }
 
     /// `wpa_cli -i <nic> save_config`，成功后把配置文件权限压回 0600。
@@ -428,6 +511,27 @@ mod tests {
     fn tray_state_without_a_default_route_is_stable() {
         let fake = FakeRunner::new().expect("netstat -rn", true, "Internet:\n");
         assert_eq!(Sys::new(&fake).tray_state(), TrayState::no_card());
+    }
+
+    #[test]
+    fn wg_connected_reads_stderr() {
+        let fake = FakeRunner::new().expect_with_error(
+            "wg show wg0",
+            "",
+            "Unable to access interface: Device not configured\n",
+        );
+        assert!(!Sys::new(&fake).wg_connected("wg0"));
+
+        let up = FakeRunner::new().expect("wg show wg0", true, "peer: abc\n");
+        assert!(Sys::new(&up).wg_connected("wg0"));
+    }
+
+    #[test]
+    fn wpa_scan_reports_fail_output() {
+        let ok = FakeRunner::new().expect("wpa_cli -i wlan0 scan", true, "OK\n");
+        assert!(Sys::new(&ok).wpa_scan("wlan0"));
+        let failed = FakeRunner::new().expect("wpa_cli -i wlan0 scan", true, "FAIL\n");
+        assert!(!Sys::new(&failed).wpa_scan("wlan0"));
     }
 
     #[test]
