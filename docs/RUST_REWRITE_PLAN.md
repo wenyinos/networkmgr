@@ -290,6 +290,7 @@ Python 的 `gettext` 是**纯 Python 解析 `.mo`**，不链接系统 `libintl`�
 | **P1** | `gettext-rs` 引入 C 侧 `libintl` 依赖（feature 行为需实机核实） | Python gettext 是纯解析，不链接 libintl | 用纯 Rust `.mo` 读取器，保持零新增系统依赖 |
 | **P1** | eframe 默认 features 拉入 wgpu/wayland，在 BSD 上编译或运行失败 | eframe 0.37 `Cargo.toml` features | `default-features = false`，只开 `glow,x11,default_fonts,clipboard` |
 | **P1** | 即时模式 UI 与 GTK 对话框布局/交互不同，用户可见变化 | 框架范式差异 | 阶段 2 先小范围灰度；逐窗口对照第 1.3 节验收 |
+| **P1** | 未部署 NetworkMgr 的 FreeBSD 主机缺 `ctrl_interface`，`wpa_cli` 全链路不可用 | 实体机 `X200-BSD` 实测，2026-11-07 | 首次部署由 `setup-nic.py` 补齐模板全局设置；`wpa_cli()` 失败必须给可见提示，不能静默显示成「无网络」 |
 | **P2** | `openrc(8)` 支持声明与代码不符 | 全仓库仅 README 提及 | 重写前向维护者澄清，不要凭 README 造一套 openrc 分支 |
 | **P2** | DragonFlyBSD 上 `PREFIX` 落到 `sys.prefix` | `setup.py:22`、`wg_api.py:14` | Rust 侧显式按 OS 列表判定 `/usr/local` |
 | ~~P3~~ **已解决** | `wheel` 组与 `%operator` sudoers 不一致 | README vs `src/sudoers.d/networkmgr` | 2026-11-07 已拍板统一为 `%wheel`，见第 17 节 |
@@ -528,3 +529,11 @@ Rust 侧把下列常量集中在 `sys.rs`，禁止各处硬编码；每个子进
 - 零依赖 crate `networkmgr-core`，`cargo test` **16 passed**：`validate.rs` 全量移植 `validate.py`，`wpa.rs` 移植 printf 编解码、`security_from_flags` 与 `key=value` 解析。
 - 已用 Python 原版 `NetworkMgr.validate` / `net_api` 交叉核对全部关键断言，结果一致；含前导零 IPv4、主机掩码、中文 SSID 转义等边界用例。
 - 目录选 `rust/` 而非项目根，因为根目录已有 `src/`（Python 脚本与图标），不能混放。
+
+### 实体机 `X200-BSD` 采集结果（2026-11-07）
+
+- FreeBSD 15.1-RELEASE-p6，接口 `em0` / `lo0` / `wlan0`，`wlan0` 已关联；`sudo -n` 免密，`/usr/sbin/wpa_cli` 存在。
+- **关键发现**：`wpa_supplicant` 在跑，但 `/etc/wpa_supplicant.conf` 里**没有 `ctrl_interface`**，`/var/run/wpa_supplicant/` 只有 `wlan0.pid`、没有控制 socket，因此 `wpa_cli status / list_networks / scan_results` 全部报 `Failed to connect to non-global ctrl_ifname: wlan0`。这类主机上原 Python 版 `wpa_cli()` 直接返回 `None`，Wi-Fi 管理功能整体不可用。
+- 项目模板 `src/wpa_supplicant.conf` 其实带 `ctrl_interface=/var/run/wpa_supplicant` 与 `ctrl_interface_group=operator`，`setup-nic.py` 的 `add_missing_settings()` 负责补齐；实体机是手工配置、未经过 NetworkMgr 部署才缺这几行。**模板的 `operator` 组与刚统一的 `%wheel` 又是一处组不一致**，若将来改成普通用户运行 GUI 会踩到，需一并核对。
+- 因此**仍缺 `wpa_cli` 的正常输出样本**。要采到必须先给实体机配置加 `ctrl_interface` 并重启 `wpa_supplicant`——远程机器有断网风险，未擅自执行，需要用户明确授权并安排在场操作。
+- 已安全入库的实体机样本（全部脱敏）：`ifconfig-wlan0.txt`、`wpa-cli-no-socket.txt`、`sysrc-wireless.txt`、`wpa-supplicant-conf-structure.txt`（密码等值全部打码）。`rust/src/ifconfig.rs` 新增无线状态解析并消费这些样本，`cargo test` **22 passed**。

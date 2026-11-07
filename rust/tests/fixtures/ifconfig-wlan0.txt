@@ -1,0 +1,14 @@
+wlan0: flags=8843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST> metric 0 mtu 1500
+	options=0
+	ether 02:00:00:00:00:01
+	inet 192.0.2.77 netmask 0xffffff00 broadcast 192.0.2.255
+	groups: wlan
+	ssid ExampleNet channel 11 (2462 MHz 11g ht/40-) bssid 00:11:22:33:44:55
+	regdomain ROW country CN authmode WPA2/802.11i privacy ON
+	deftxkey UNDEF AES-CCM 3:128-bit AES-CCM ucast:128-bit txpower 30
+	bmiss 10 scanvalid 60 protmode CTS ampdulimit 64k ampdudensity 4
+	-amsdutx amsdurx shortgi -stbc -ldpc -uapsd wme roaming MANUAL
+	parent interface: iwn0
+	media: IEEE 802.11 Wireless Ethernet MCS mode 11ng
+	status: associated
+	nd6 options=29<PERFORMNUD,IFDISABLED,AUTO_LINKLOCAL>

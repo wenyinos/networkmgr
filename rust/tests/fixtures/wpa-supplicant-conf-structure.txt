@@ -1,0 +1,13 @@
+network=<redacted>
+	ssid=<redacted>
+	scan_ssid=<redacted>
+	psk=<redacted>
+
+}
+
+network=<redacted>
+ ssid=<redacted>
+ key_mgmt=<redacted>
+ proto=<redacted>
+ psk=<redacted>
+}

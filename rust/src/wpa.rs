@@ -133,6 +133,20 @@ pub fn parse_key_values(text: &str) -> BTreeMap<String, String> {
 mod tests {
     use super::*;
 
+    // 样本来自实体机 X200-BSD，值已脱敏。
+    const NO_SOCKET: &str = include_str!("../tests/fixtures/wpa-cli-no-socket.txt");
+    const CONF_STRUCTURE: &str =
+        include_str!("../tests/fixtures/wpa-supplicant-conf-structure.txt");
+
+    #[test]
+    fn real_host_without_ctrl_interface_makes_wpa_cli_unusable() {
+        // 生产路径靠 wpa_cli() 的错误返回判定，这里记录诊断文本与根因，
+        // 避免以后把「配置里没有 ctrl_interface」误判成 daemon 未运行。
+        assert!(NO_SOCKET.contains("Failed to connect to non-global ctrl_ifname"));
+        assert!(!CONF_STRUCTURE.contains("ctrl_interface"));
+        assert!(CONF_STRUCTURE.contains("network="));
+    }
+
     #[test]
     fn plain_ascii_is_unchanged() {
         assert_eq!(printf_encode("Guest"), "Guest");

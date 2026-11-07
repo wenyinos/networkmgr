@@ -1,0 +1,3 @@
+create_args_wlan0: country CN regdomain ROW
+ifconfig_wlan0: WPA inet 192.0.2.77 netmask 255.255.255.0
+wlans_iwn0: wlan0

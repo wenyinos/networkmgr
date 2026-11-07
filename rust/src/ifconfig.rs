@@ -54,6 +54,35 @@ pub fn default_route_interface(text: &str) -> Option<&str> {
         .and_then(|line| line.split_whitespace().last())
 }
 
+/// 从 `ifconfig wlan0` 输出取当前关联的 SSID。
+///
+/// 形如 `ssid ExampleNet channel 11 (2462 MHz ...) bssid ...`；只取 ssid 后的
+/// 第一个词。含空格的 SSID 在 ifconfig 里的表现形式需用 mock 另行覆盖。
+pub fn wireless_ssid(text: &str) -> Option<&str> {
+    text.lines()
+        .find_map(|line| line.trim().strip_prefix("ssid "))
+        .and_then(|rest| rest.split_whitespace().next())
+}
+
+/// 从 `ifconfig wlan0` 输出取 BSSID。
+pub fn wireless_bssid(text: &str) -> Option<&str> {
+    text.lines()
+        .find_map(|line| line.split_once("bssid "))
+        .and_then(|(_, rest)| rest.split_whitespace().next())
+}
+
+/// 判断是否已关联（`status: associated`）。
+pub fn wireless_is_associated(text: &str) -> bool {
+    text.lines().any(|line| line.trim() == "status: associated")
+}
+
+/// 取无线克隆接口的父物理接口，例如 `parent interface: iwn0` → `iwn0`。
+pub fn wireless_parent_interface(text: &str) -> Option<&str> {
+    text.lines()
+        .find_map(|line| line.trim().strip_prefix("parent interface: "))
+        .map(str::trim)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -63,6 +92,9 @@ mod tests {
     const ETHER: &str = include_str!("../tests/fixtures/ifconfig-l-ether.txt");
     const NETSTAT: &str = include_str!("../tests/fixtures/netstat-rn.txt");
     const SYSRC: &str = include_str!("../tests/fixtures/sysrc-network.txt");
+    // 样本来自实体机 X200-BSD（FreeBSD 15.1-RELEASE-p6），值已脱敏。
+    const WLAN: &str = include_str!("../tests/fixtures/ifconfig-wlan0.txt");
+    const SYSRC_WIRELESS: &str = include_str!("../tests/fixtures/sysrc-wireless.txt");
 
     #[test]
     fn parses_real_freebsd_15_interfaces() {
@@ -81,5 +113,20 @@ mod tests {
     fn sysrc_sample_uses_ifconfig_default() {
         assert!(SYSRC.contains("ifconfig_DEFAULT: DHCP"));
         assert!(SYSRC.contains("hostname: freebsd"));
+    }
+
+    #[test]
+    fn parses_real_associated_wireless_interface() {
+        assert_eq!(wireless_ssid(WLAN), Some("ExampleNet"));
+        assert_eq!(wireless_bssid(WLAN), Some("00:11:22:33:44:55"));
+        assert!(wireless_is_associated(WLAN));
+        assert_eq!(wireless_parent_interface(WLAN), Some("iwn0"));
+    }
+
+    #[test]
+    fn real_rc_conf_uses_wpa_with_static_address() {
+        assert!(SYSRC_WIRELESS.contains("ifconfig_wlan0: WPA inet 192.0.2.77"));
+        assert!(SYSRC_WIRELESS.contains("wlans_iwn0: wlan0"));
+        assert!(SYSRC_WIRELESS.contains("create_args_wlan0"));
     }
 }
