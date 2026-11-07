@@ -719,6 +719,8 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 
 **尚未在 VM 上跑 `--apply`**：VM 只有 `vtnet0` 一块网卡，改成静态地址会立刻断开 SSH，等于把自己锁在门外。写盘路径目前只由 `FakeRunner` 断言命令参数，真机验证留给 C 类环境，或给 VM 临时挂第二块网卡后再做。
 
+**CI 验证**：run `42381104628` 成功（9m15s）。FreeBSD 15.1 上 `cargo test --locked` 跑通全部 74 个测试，说明 `std::os::unix::fs::PermissionsExt`、`sleep`、`sh -c` 这些实现细节在目标平台成立，不只是 Linux 上能过。
+
 
 
 
