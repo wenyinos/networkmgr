@@ -547,4 +547,54 @@ Rust 侧把下列常量集中在 `sys.rs`，禁止各处硬编码；每个子进
 - 两处有意差异（沿用既有移植策略）：数字字段或 `\xHH` 畸形时跳过该行 / 按字面保留，不 panic；Python 原版会抛未捕获异常。
 - 验证：`cargo test` **27 passed**（22 → 27）。另用 Python 原版 `net_api.wpa_status` / `wpa_networks` / `scan_networks` / `bar_percent`（`unittest.mock` 注入这 4 份样本）跑同一批断言，结果逐项一致，避免 Rust 测试自证。
 - **边界声明**：mock 只保证「给定输出 → 解析结果」的契约；daemon 可达性、控制 socket、扫描时序仍须 C 类实机验收。第 9 节 P0 风险（VM 无无线网卡）与 P1 风险（缺 `ctrl_interface`）**均未关闭**。
-- 已知项：crate 未按 `rustfmt` 统一格式，`cargo fmt --check` 在 `validate.rs` 等既有文件上同样报差异。为保持最小 diff，本轮不引入全仓格式化；要统一应单独起一次纯格式化提交。
+- 已知项（**已于第 18 节关闭**）：当时 crate 未按 `rustfmt` 统一格式，`cargo fmt --check` 在 `validate.rs` 等既有文件上同样报差异。随后已用一次独立纯格式化提交统一。
+
+---
+
+## 18. 完整实施（2026-11-07 晚，优先级高于前文）
+
+用户指示「继续完整实施，不必确认」。本轮把第 10 节验收清单里的两个 GUI spike、远端 FreeBSD CI、rustfmt 全部落地。**所有提交仍为本地、未 push，因此 CI 尚未真实运行过。**
+
+### 18.1 rustfmt 统一（提交 `06dad8a`）
+
+- `cargo fmt` 覆盖 `rust/src/` 四个模块，`cargo fmt --check` 现为干净；单独一次纯格式化提交，不与功能改动混在一起。第 17 节末尾「仓库未统一 rustfmt」的已知项**已关闭**。
+- 两个 crate 的 fmt 检查写进 CI，放在宿主 runner 上跑，不依赖 FreeBSD `lang/rust` 是否打包 rustfmt。
+
+### 18.2 两个 GUI spike（本机实跑通过）
+
+- `rust/spikes/` 是**独立 workspace**，不把 GUI 依赖带进零依赖的 `networkmgr-core`；`rust/Cargo.lock` 仍是 7 行，A 类环境 `cargo test` 照旧 27 passed。
+- 依赖版本由 cargo 从 rsproxy 实拉确认：`eframe 0.37.0`、`tray-icon 0.26.1`、`muda 0.21.2`（经 `tray_icon::menu` re-export 使用，不直接依赖）、`gtk 0.18`。`rust/spikes/Cargo.lock` 入库，CI 全程 `--locked`。
+- eframe 按第 2 节结论关掉默认 features，只开 `glow / x11 / default_fonts / system_fonts / clipboard`。
+- **API 实测纠错**：eframe 0.37 的 `App` trait 是 `fn ui(&mut self, &mut egui::Ui, &mut Frame)`，不再是旧版 `fn update(&mut self, &egui::Context, &mut Frame)`；`egui::CentralPanel::show` 也改收 `&mut Ui`。前文若提到 `update()`，以本节为准。
+- 后端用 feature 切换：`appindicator`（默认，第 5.1 节推荐，需 GTK 主循环）/ `sni`（ksni 自带 D-Bus worker，不需要 GTK）。这解决了本机缺 `gtk3` / `libayatana-appindicator` 开发库仍能编译验证的问题；`libappindicator` feature 已隐含 `muda-gtk3`，无需重复开启。
+- **本机（Fedora）实测**：`cargo check --all-targets`、`cargo test`、release `--locked --bins` 全通过；`SPIKE_SECONDS=2` 实跑，spike ① 起窗绘制 **105 帧**后经 `ViewportCommand::Close` 正常退出，spike ② 托盘图标创建成功并按超时退出。A 类环境原本设定「不验任何 GUI」，这里只是**编译与起窗预验证，不替代 B 类 FreeBSD 验收**（第 13 节矩阵不变）。
+- 两个 bin 都支持 `SPIKE_SECONDS`，供 CI / 无人值守自动退出；窗口 spike 走正常关闭流程而非 `process::exit`。
+
+### 18.3 远端 FreeBSD CI（`.github/workflows/freebsd-rust.yml`）
+
+- 官方 README 确认 `vmactions/freebsd-vm@v1` **默认 release 就是 15.1**、amd64 走 rsync 同步、`prepare` / `run` 用 sh 在 guest 内执行、workspace 会 copyback 回宿主；`actions/checkout@v7`、`actions/upload-artifact@v4` 的版本存在性已查 tags 确认。
+- `prepare` 装 `rust pkgconf gtk3 libayatana-appindicator mesa-dri fontconfig wqy-fonts`；`run` 把 `CARGO_TARGET_DIR` 指到 `/tmp/networkmgr-target`，**避免 rsync copyback 回传 GB 级 `target/`**，只把两个 release 二进制放进 `artifacts/`。
+- CI 内四件事：`cargo test --locked`（core 27 测试）、`cargo test --features sni`（SNI 路径）、`cargo build --release --locked --bins`（**默认 appindicator 后端**）、上传 `networkmgr-freebsd15-spikes` artifact。
+- 触发：push 到 `master` / `feat/rust-rewrite` / `docs/rust-rewrite-plan` 且改了 `rust/**`，或 PR、`workflow_dispatch`。
+- 本机已校验：PyYAML 解析通过、4 个 step 结构正确、`cargo fmt --check --manifest-path` 两个 crate 均 OK、release `--locked` 构建 3m25s 通过。
+
+### 18.4 VM 运行验收（`rust/spikes/deploy-to-vm.sh`）
+
+```sh
+# 1) CI 跑完后下载产物
+gh run download <run-id> -n networkmgr-freebsd15-spikes -D ./artifacts
+# 2) 取 VM 当前 DHCP 地址（不要硬编码 192.168.122.170）
+virsh -c qemu:///system net-dhcp-leases default
+# 3) 拷进 VM 并实跑（不存密码，走 SSH 密钥或交互认证）
+./rust/spikes/deploy-to-vm.sh zemin@<vm-ip> ./artifacts
+```
+
+脚本自动探测 `DISPLAY=:0` 的 lightdm XAUTHORITY，设 `LIBGL_ALWAYS_SOFTWARE=1`，两个 spike 各跑 3 秒并打印退出码；`sh -n` 语法校验通过。根 `.gitignore` 加了 `/artifacts/`，避免产物误入库。**这一步尚未执行**：需要先 push 触发 CI 拿到 FreeBSD 二进制。
+
+### 18.5 仍未关闭 / 边界
+
+- **未 push**：CI 没有真实跑过；FreeBSD 上 `appindicator` 后端的编译链接、图标是否出现在 Xfce 面板，仍**未经 B 类验证**。第 10 节第 312 / 313 条保持未勾选。
+- 第 9 节 P0（VM 无无线网卡）、P1（缺 `ctrl_interface`）不变；真实 `wpa_cli` 正常输出样本仍缺，实体机 `/etc/wpa_supplicant.conf` 与 `wpa_supplicant` 全程未改动。
+- `src/wpa_supplicant.conf` 的 `ctrl_interface_group=operator` 与 `%wheel` 不一致仍只记录未改。
+- 本轮**没有产出可安装的网络管理二进制**：spike 只验证图形栈，业务逻辑仍在 Python 版，阶段 0/1 的功能迁移尚未开始。VM 仍未装 rust/cargo，遵守第 17 节的边界。
+

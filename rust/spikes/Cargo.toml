@@ -1,0 +1,30 @@
+[package]
+name = "networkmgr-spikes"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+publish = false
+
+# 独立 workspace：GUI 依赖不进入零依赖的 networkmgr-core。
+[workspace]
+
+[features]
+# FreeBSD / Xfce 运行验收走方案 5.1 节推荐的 libappindicator 后端。
+default = ["appindicator"]
+appindicator = ["tray-icon/libappindicator", "dep:gtk"]
+# A 类环境（本机无 GTK 开发库）用 SNI 后端验证同一套代码可编译。
+sni = ["tray-icon/ksni"]
+
+[dependencies]
+# 只开 glow + x11：避开 wgpu / wayland 在 BSD 上的一整套系统库依赖。
+# system_fonts 是中文界面必需，egui 默认字体不含 CJK。
+eframe = { version = "0.37.0", default-features = false, features = [
+    "glow",
+    "x11",
+    "default_fonts",
+    "system_fonts",
+    "clipboard",
+] }
+tray-icon = { version = "0.26.1", default-features = false }
+# muda 通过 tray_icon::menu re-export，无需直接依赖；这里只借用它的 GTK 主循环。
+gtk = { version = "0.18", optional = true }

@@ -10,7 +10,8 @@ dist
 build
 eggs
 parts
-bin
+# 只忽略根目录的 Python 打包产物；无斜杠的 bin 会误伤 rust/spikes/src/bin/
+/bin
 var
 sdist
 develop-eggs
@@ -49,4 +50,7 @@ venv*/*
 
 # python core dump
 python*.core
+
+# FreeBSD CI 产物（下载到本目录后拷进 VM，不入库）
+/artifacts/
 

@@ -1,0 +1,69 @@
+name: FreeBSD 15 Rust build
+
+# 本机 Fedora 不能交叉编译 FreeBSD（无 x86_64-unknown-freebsd target，也无 cross/zig），
+# VM 又不装编译工具链，所以 FreeBSD 二进制一律由这里的远端 FreeBSD 15 runner 产出。
+on:
+  push:
+    branches: [master, 'feat/rust-rewrite', 'docs/rust-rewrite-plan']
+    paths:
+      - 'rust/**'
+      - '.github/workflows/freebsd-rust.yml'
+  pull_request:
+    paths:
+      - 'rust/**'
+      - '.github/workflows/freebsd-rust.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freebsd15:
+    name: FreeBSD 15.1 (amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # rustfmt 不依赖目标平台，放在宿主 runner 上跑，避免依赖 FreeBSD lang/rust
+      # port 是否打包了 rustfmt。
+      - name: Check formatting
+        run: |
+          cargo fmt --check --manifest-path rust/Cargo.toml
+          cargo fmt --check --manifest-path rust/spikes/Cargo.toml
+
+      - name: Build core tests and GUI spikes on FreeBSD 15.1
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '15.1'
+          sync: rsync
+          prepare: |
+            pkg install -y rust pkgconf gtk3 libayatana-appindicator mesa-dri fontconfig wqy-fonts
+          run: |
+            set -eu
+            freebsd-version
+            rustc --version
+            cargo --version
+
+            # 构建缓存放在 workspace 之外，rsync copyback 才不会把 GB 级 target/ 回传宿主。
+            export CARGO_TARGET_DIR=/tmp/networkmgr-target
+            mkdir -p "$CARGO_TARGET_DIR"
+
+            cd rust
+            cargo test --locked
+
+            cd spikes
+            cargo test --no-default-features --features sni --locked
+            cargo build --release --locked --bins
+
+            mkdir -p ../../artifacts
+            cp "$CARGO_TARGET_DIR/release/eframe-window" \
+               "$CARGO_TARGET_DIR/release/tray-status" \
+               ../../artifacts/
+            file ../../artifacts/*
+
+      - name: Upload FreeBSD binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: networkmgr-freebsd15-spikes
+          path: artifacts/
+          if-no-files-found: error
