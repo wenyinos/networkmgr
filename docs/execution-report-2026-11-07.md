@@ -146,3 +146,30 @@
 
 - 配置窗口的写盘 + `service netif restart` 闭环：`epair` 不承载真实流量，重启后地址生效与连通性需要真实网卡或第二块 virtio 网卡。
 - C 类实机验收、P0/P1 风险、PR #133 合并，均未变。
+
+---
+
+## 第五轮（00:04–00:15）：配置窗口改用 COSMIC / iced 视觉
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 15 | 按参考图重做配置窗口，支持明暗切换 | 构建 | `config-window.rs` +445/−120 行，6 个测试 | ✅ 完成 |
+| 16 | 截图入库并在 README 增加「界面预览」 | 写作 | `docs/images/config-{light,dark}.png` | ✅ 完成 |
+| 17 | 统一更新 README / AGENTS.md / 方案 / 报告 / 看板 | 写作 | 各文档同步到阶段 3 骨架状态 | ✅ 完成 |
+
+### 关键结果
+
+- 配色**逐像素取色**：明色选中 `#006CA0`、卡片 `#FAFAFA`、窗口 `#EBEBEB`；
+  暗色选中 `#69E4E3`、卡片 `#2B2B2B`、窗口 `#181818`。
+- 布局改为 252 px 左侧导航（选中项为整行胶囊）+ 右侧卡片式表单；卡片圆角 12、内边距 16；
+  按钮统一 16 圆角胶囊。主题切换在侧边栏底部，另支持 `NETWORKMGR_THEME=dark` 启动即暗色。
+- **egui 0.37 API 变化**：`SidePanel` 已并入 `Panel`，且不再提供 `exact_width`；
+  改为自绘两栏背景 + `ui.scope_builder(UiBuilder::new().max_rect(..))`。
+- 环境坑：KWin Wayland 下 `grim` 报 compositor 不支持 screencopy，改用 `spectacle -b -n -o`；
+  `pkill -f 'target/debug/config-window'` 会匹配到执行命令的 shell 自身导致自杀，必须用 `pkill -x`。
+
+### 未执行
+
+- 导航图标仍是 emoji，未换成 `src/icons/` 的 PNG。
+- 卡片与窗口背景对比度偏柔和，可按需再拉开。
+- 阶段 3 剩余项（扫描连接流程、300 ms 动画、Forget）与 C 类实机未变。

@@ -822,7 +822,8 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
   尺寸完全可控，也更贴近参考图。
 - 功能未变：默认 dry-run，`--apply` 才写；IPv4/IPv6、DHCP/Manual、SLAAC、逐字段校验与预览全部保留。
   测试 6 passed（原 5 + 主题对比 1）。
-- 截图：`artifacts/cfg-light.png`、`artifacts/cfg-dark.png`（该目录已 gitignore）。
+- 截图：**`docs/images/config-light.png`、`docs/images/config-dark.png`**（已入库，README「界面预览」引用）；
+  原始全屏图留在 `artifacts/`（gitignore）。
 
 
 

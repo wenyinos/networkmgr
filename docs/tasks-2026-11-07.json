@@ -108,6 +108,24 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t14",
+    "title": "配置窗口改用 COSMIC / iced 视觉，支持明暗切换",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "config-window.rs +445/−120 行，6 个测试；docs/images 两张截图",
+    "criteria": "配色逐像素取自参考图；明暗一键切换；功能与校验不变",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t15",
+    "title": "界面预览入 README，统一更新全部文档并推送",
+    "type": "写作",
+    "status": "done",
+    "deliverable": "README 界面预览、AGENTS.md 仓库状态、方案第 27 节、报告第五轮",
+    "criteria": "文档数字与实际一致（core 76 / GUI 9 / 六个二进制）",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",
