@@ -124,3 +124,25 @@
 - **VM 上没跑 `--apply`**：VM 只有一块网卡，改静态地址会立刻断 SSH。要验真机写盘，得给 VM 临时挂第二块网卡，或等 C 类环境。
 - 配置窗口没有调用 `service netif restart`（阶段 2 收尾项）。
 - C 类实机验收、P0/P1 风险维持原状。
+
+---
+
+## 第四轮（22:30–22:55）：真机写盘验证
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 13 | 新增 `apply-config` 诊断命令，让写盘脱离 GUI 可验 | 构建 | `rust/src/bin/apply-config.rs`（200 行） | ✅ 完成 |
+| 14 | 在 VM 用 `epair0a` 真机验证 `sysrc` + `resolv.conf` 写入 | 分析 | 第 24 节记录 + 全量清理 | ✅ 完成 |
+
+### 关键结果
+
+- **不碰 `vtnet0`**：`ifconfig epair0 create` 出 `epair0a`/`epair0b` 作靶子，写盘只作用于它，SSH 全程未断。
+- dry-run 打印、`--apply` 执行、`sysrc -n` 回读、`/etc/rc.conf` 实际内容、`/etc/resolv.conf` 改写五项全部符合预期，退出码 0。
+- **最有价值的一行**：`sysrc` 写出的是 `ifconfig_epair0a="inet ..."`，自动补双引号、**不做转义**。这把「`rc.conf` 的防线是写入值本身」从注释变成了实测证据。
+- 清理完整：`sysrc -x` 删变量、`resolv.conf` 从备份还原、`epair0a` destroy，接口回到 `vtnet0 lo0`。
+- CI run `42382051444` 成功（9m8s），artifact 里五个二进制（新增 `apply-config`，561 KB）。
+
+### 未执行
+
+- 配置窗口的写盘 + `service netif restart` 闭环：`epair` 不承载真实流量，重启后地址生效与连通性需要真实网卡或第二块 virtio 网卡。
+- C 类实机验收、P0/P1 风险、PR #133 合并，均未变。

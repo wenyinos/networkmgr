@@ -90,6 +90,24 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t12",
+    "title": "新增 apply-config 诊断命令，让写盘脱离 GUI 可验",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "rust/src/bin/apply-config.rs（200 行）",
+    "criteria": "dry-run 默认；--apply 才写；非法值退出码 1",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t13",
+    "title": "VM 用 epair0a 真机验证 sysrc + resolv.conf 写入并清理",
+    "type": "分析",
+    "status": "done",
+    "deliverable": "第 24 节记录：rc.conf 双引号实测、resolv.conf 改写、接口已销毁",
+    "criteria": "sysrc -n 回读一致；SSH 全程未断；清理后只剩 vtnet0 lo0",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",
