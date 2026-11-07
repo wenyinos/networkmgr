@@ -60,6 +60,7 @@ jobs:
                /tmp/nm-spikes/release/eframe-window \
                /tmp/nm-spikes/release/tray-status \
                /tmp/nm-spikes/release/config-window \
+               /tmp/nm-spikes/release/networkmgr \
                ../../artifacts/
             file ../../artifacts/*
 
