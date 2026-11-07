@@ -646,5 +646,31 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - **C 类实机验收未做**：真实 Wi-Fi 扫描/连接、企业级 EAP、`ctrl_interface` 缺失主机、GhostBSD 桌面集成与 port 打包。
 - 本轮仍无可安装的网络管理二进制；VM 未装 rust/cargo，遵守第 17 节边界。P0 / P1 风险维持原状。
 
+---
+
+## 21. 阶段 1 进展（2026-11-07 21:50，优先级高于前文）
+
+按第 6 节阶段 1 继续推进，本轮补齐 `config` / `wg` / `state` 三个模块，`i18n` 未开始。
+
+| 模块 | 状态 | 测试数 | 关键点 |
+|---|---|---|---|
+| `validate.rs` | 完成（前序） | 6 | 逐条等价，拒绝用例齐全 |
+| `wpa.rs` | 完成（前序） | 13 | printf 编解码 + `status`/`list_networks`/`scan_results` |
+| `config.rs` | **本轮完成** | 13 | `rc.conf` 值白名单、`sysrc` 参数、`resolv.conf`、PSK/WEP/Open/EAP 字段、`phase2` 的 `auth=`/`autheap=` 分支 |
+| `wg.rs` | **本轮完成** | 6 | 服务状态、设备名、`# Name =` 显示名、判活、`wg-quick` 参数 |
+| `state.rs` + `dump-state` | **本轮完成（A 类）** | 11 | `tray_state()` 等价；5 种状态 JSON 与 Python 逐字节一致 |
+| `i18n.rs` | 未开始 | 0 | 需先有真实 `.mo` 才能做端到端断言 |
+
+- `cargo test` **58 passed**（阶段 1 前 27 → 40 → 57 → 58），`cargo fmt --check` 干净；提交 `9609826`。
+- 交叉核对方法：用 Python 原版 `save_psk_network` / `save_open_network` / `save_eap_network` /
+  `tray_state`（`unittest.mock` 注入 `_save_network`、`default_card`、`_ifconfig`、`wpa_status`、
+  `wpa_cli`）生成基准，再把结果作为**字面量**写进 Rust 测试逐字节比对，避免两边同时错。
+- **`config.rs` 的核心安全结论**：`rc.conf` 的防线是写入值本身（`RC_CONF_SAFE_REGEX` 白名单），
+  不是 `Command` 参数列表。引号、`$`、反引号、反斜杠、换行全部拒绝，空格放行。
+- 有意的行为保留：`wg.device_name` 复刻 Python 的 `str.replace('.conf','')` 全替换语义；
+  `subnet_hex_to_dec` 对畸形 `0x` 串改为原样返回而非抛异常。
+- 未关闭：`dump-state` 与 Python 在同一台 FreeBSD 上的**实机逐字段 diff** 未做（需 B/C 类）；
+  `i18n.rs` 未开始；阶段 2 的配置窗口未启动。执行报告见 `docs/execution-report-2026-11-07.md`。
+
 
 

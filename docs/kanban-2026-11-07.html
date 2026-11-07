@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetworkMgr Rust 阶段 1 任务看板</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#ffffff; --line:#e5e7eb; --text:#1f2328; --muted:#6b7280; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); padding:24px; }
+  .wrap { max-width:1100px; margin:0 auto; }
+  h1 { font-size:20px; margin-bottom:4px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:8px; }
+  .progress { display:flex; align-items:center; gap:10px; margin:12px 0 20px; }
+  .bar { flex:1; height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; }
+  .fill { height:100%; background:#34a853; width:80.0%; transition:width .3s; }
+  .pct { font-size:13px; color:var(--muted); white-space:nowrap; }
+  .board { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  @media (max-width:760px) { .board { grid-template-columns:1fr; } }
+  .col { background:#eef0f2; border-radius:10px; padding:12px; }
+  .col-head { display:flex; align-items:center; gap:8px; font-weight:600; font-size:14px; margin-bottom:10px; }
+  .dot { width:8px; height:8px; border-radius:50%; }
+  .count { margin-left:auto; background:#fff; color:var(--muted); font-size:12px; padding:1px 8px; border-radius:10px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:10px; }
+  .card-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .tag { color:#fff; font-size:11px; padding:2px 8px; border-radius:4px; }
+  .status { font-size:11px; padding:2px 8px; border-radius:4px; border:1px solid; }
+  .card-title { font-size:14px; font-weight:600; line-height:1.5; margin-bottom:8px; }
+  .kv { font-size:12px; line-height:1.5; margin-bottom:4px; }
+  .kv .k { color:var(--muted); display:inline-block; width:64px; vertical-align:top; }
+  .kv .v { color:var(--text); }
+  .footer { margin-top:20px; font-size:13px; color:var(--muted); }
+  a { color:#0ea5e9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>NetworkMgr Rust 阶段 1 任务看板</h1>
+  <div class="sub">2026-11-07 · 共 5 个任务 · 已完成 4 个</div>
+  <div class="progress">
+    <div class="bar"><div class="fill"></div></div>
+    <span class="pct">80%</span>
+  </div>
+  <div class="board"><div class="col"><div class="col-head"><span class="dot" style="background:#9aa0a6"></span>待办<span class="count">1</span></div><div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#9aa0a6;border-color:#9aa0a6">待办</span></div>
+<div class="card-title">实现 i18n：纯 Rust .mo 读取器</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">rust/src/i18n.rs</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">能读出简中 .mo，缺文件回退原文</span></div>
+</div></div>
+<div class="col"><div class="col-head"><span class="dot" style="background:#e8a33d"></span>进行中<span class="count">0</span></div></div>
+<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">4</span></div><div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">移植 config：rc.conf 安全写值、resolv.conf、PSK/WEP/Open/EAP 字段</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">rust/src/config.rs（592 行，13 个测试）</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">cargo test 全绿；字段顺序与 Python 原版逐项一致</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">移植 wg：隧道发现、显示名、wg show 判活、wg-quick 参数</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">rust/src/wg.rs（217 行，6 个测试）</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">Connected/Disconnected 判据与 wg_api.py 一致</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">实现 state：tray_state() 等价聚合 + 稳定 JSON + dump-state</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">rust/src/state.rs（509 行）、rust/src/bin/dump-state.rs</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">5 种状态 JSON 与 Python json.dumps 逐字节相同</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#8b5cf6">写作</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">写执行报告、更新方案文档、生成看板并提交</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">docs/execution-report-2026-11-07.md、方案第 21 节、kanban-2026-11-07.html</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">报告四段齐全；提交推送成功</span></div>
+</div></div></div>
+  <div class="footer">由 goal-driven-autonomous-agent 生成。详细结果见执行报告。</div>
+</div>
+</body>
+</html>

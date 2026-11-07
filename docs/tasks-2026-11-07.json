@@ -1,0 +1,47 @@
+[
+  {
+    "id": "t1",
+    "title": "移植 config：rc.conf 安全写值、resolv.conf、PSK/WEP/Open/EAP 字段",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "rust/src/config.rs（592 行，13 个测试）",
+    "criteria": "cargo test 全绿；字段顺序与 Python 原版逐项一致",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t2",
+    "title": "移植 wg：隧道发现、显示名、wg show 判活、wg-quick 参数",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "rust/src/wg.rs（217 行，6 个测试）",
+    "criteria": "Connected/Disconnected 判据与 wg_api.py 一致",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t3",
+    "title": "实现 state：tray_state() 等价聚合 + 稳定 JSON + dump-state",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "rust/src/state.rs（509 行）、rust/src/bin/dump-state.rs",
+    "criteria": "5 种状态 JSON 与 Python json.dumps 逐字节相同",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t4",
+    "title": "实现 i18n：纯 Rust .mo 读取器",
+    "type": "构建",
+    "status": "todo",
+    "deliverable": "rust/src/i18n.rs",
+    "criteria": "能读出简中 .mo，缺文件回退原文",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t5",
+    "title": "写执行报告、更新方案文档、生成看板并提交",
+    "type": "写作",
+    "status": "done",
+    "deliverable": "docs/execution-report-2026-11-07.md、方案第 21 节、kanban-2026-11-07.html",
+    "criteria": "报告四段齐全；提交推送成功",
+    "report": "execution-report-2026-11-07.md"
+  }
+]
