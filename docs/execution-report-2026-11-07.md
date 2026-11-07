@@ -100,3 +100,27 @@
 - 无线分支的实机比对：VM 无无线网卡，需 C 类实机（`X200-BSD` / GhostBSD）。
 - 配置窗口的写盘与接口重启：属阶段 2 后续，骨架只做校验与预览。
 - C 类验收、P0/P1 风险、PR #133 合并（zh_CN 旧译）全部未变；本轮无可安装二进制。
+
+---
+
+## 第三轮（22:20–22:30）：阶段 2 写盘链路
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 10 | 实现 `sys.rs` 命令执行层（超时、错误语义、FakeRunner） | 构建 | `rust/src/sys.rs`（455 行 / 9 测试） | ✅ 完成 |
+| 11 | 配置窗口接写盘（`--apply`，默认 dry-run） | 构建 | `config-window.rs` 新增 91 行 | ✅ 完成 |
+| 12 | `dump-state` 复用 `Sys`，与托盘同源 | 构建 | `dump-state.rs` 从 60 行缩到 12 行 | ✅ 完成 |
+
+### 关键结果
+
+- **超时不用管道**：轮询 `try_wait` + 输出落临时文件，超时直接 kill。`Command::output()` 没有超时，而先 `try_wait` 再读管道会被写满的缓冲区卡死——这是本轮实现里最容易埋雷的地方。
+- **`sysrc_set` 校验失败返回 `SysError::Rejected`**，最初写成静默 `Ok(())`，等于让调用方以为写成功；已改正并加了断言。
+- `wpa_save_config` 成功后补 `chmod 0600`，原因是 daemon 自己的 chmod 被 `#ifdef ANDROID` 包住，FreeBSD 上文件权限由 umask 决定。
+- 配置窗口默认 dry-run，`--apply` 才写盘；写 `/etc/rc.conf` 与 `/etc/resolv.conf`，不重启接口（重启属阶段 2 收尾）。
+- 测试：core **74 passed**、spikes **6 passed**。
+
+### 未执行 / 仍关闭
+
+- **VM 上没跑 `--apply`**：VM 只有一块网卡，改静态地址会立刻断 SSH。要验真机写盘，得给 VM 临时挂第二块网卡，或等 C 类环境。
+- 配置窗口没有调用 `service netif restart`（阶段 2 收尾项）。
+- C 类实机验收、P0/P1 风险维持原状。

@@ -63,6 +63,33 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t9",
+    "title": "实现 sys：命令执行层（超时、错误语义、FakeRunner）",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "rust/src/sys.rs（455 行，9 个测试）",
+    "criteria": "真实超时测试通过；非法 rc.conf 值返回 Rejected 且不执行命令",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t10",
+    "title": "配置窗口接写盘（--apply，默认 dry-run）",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "config-window.rs 新增 91 行",
+    "criteria": "默认只预览；--apply 才 sysrc + 写 resolv.conf",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t11",
+    "title": "dump-state 复用 Sys，与托盘路径同源",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "dump-state.rs 从 60 行缩到 12 行",
+    "criteria": "输出与重构前一致（JSON 字段不变）",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",

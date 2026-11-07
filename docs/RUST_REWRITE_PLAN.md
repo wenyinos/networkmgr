@@ -700,6 +700,26 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - 这满足了阶段 1 的验收条件「同一台机器、同一网络状态下两份 JSON 一致」。**但只覆盖有线连通状态**：
   无线 `wlan0` 分支仍受 VM 无无线网卡限制，第 9 节 P0 风险不变。
 
+---
+
+## 23. 阶段 2 写盘链路（2026-11-07 22:25，提交 `4deb899`）
+
+| 项 | 结果 |
+|---|---|
+| `sys.rs` | 命令执行层（455 行 / 9 测试）：`Runner` trait + `RealRunner`（真实执行）/ `FakeRunner`（记录调用、回放输出） |
+| 超时实现 | 轮询 `try_wait` + 输出落临时文件，超时直接 `kill`；**不用管道**，避免子进程写满缓冲区后 `output()` 永久阻塞 |
+| 安全语义 | `sysrc_set` 校验失败返回 `SysError::Rejected`，**不静默跳过**——否则调用方会以为写成功而 `rc.conf` 里什么都没有 |
+| 覆盖命令 | `sysrc` set/unset、`ifconfig`、`netstat -rn`、`wpa_cli status/bss current/save_config`、`service`、`wg-quick` |
+| `wpa_save_config` | 成功后补 `chmod 0600`：daemon 自己的 chmod 是 `#ifdef ANDROID`，FreeBSD 上 rename 后权限由 umask 决定，而文件里全是口令 |
+| `dump-state` | 改为复用 `Sys::tray_state()`，从 60 行缩到 12 行，诊断路径与托盘完全同源 |
+| 配置窗口 | 新增 `--apply`：默认 dry-run 只预览；`--apply` 才执行 `sysrc` 并整份改写 `/etc/resolv.conf` |
+| 测试 | core **74 passed**、spikes **6 passed**，`cargo fmt --check` 干净 |
+
+**为什么默认 dry-run**：`/etc/rc.conf` 是开机时 root 执行的 shell 脚本，`/etc/resolv.conf` 一改就影响解析；骨架阶段误点一下就可能断网。真实写盘必须显式 `--apply`，且要通过 `sudo networkmgr_configuration` 启动才有效。
+
+**尚未在 VM 上跑 `--apply`**：VM 只有 `vtnet0` 一块网卡，改成静态地址会立刻断开 SSH，等于把自己锁在门外。写盘路径目前只由 `FakeRunner` 断言命令参数，真机验证留给 C 类环境，或给 VM 临时挂第二块网卡后再做。
+
+
 
 
 
