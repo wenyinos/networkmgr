@@ -805,6 +805,26 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
   代码审查 + 人工点击确认，刷新只能靠长时间运行观察。这条限制写在这里，避免以后把
   "图标出现"误当成"菜单也验过了"。
 
+---
+
+## 27. 配置窗口改用 COSMIC / iced 视觉（2026-11-08 00:10，提交 `9843f7f`）
+
+用户提供两张 iced 的 COSMIC Design System 截图（明/暗），要求前端改用该风格并支持明暗切换。
+
+- 配色**从参考图逐像素取色**，不是凭感觉调：明色选中 `#006CA0`、卡片 `#FAFAFA`、
+  窗口 `#EBEBEB`、侧栏 `#F7F7F7`；暗色选中 `#69E4E3`、卡片 `#2B2B2B`、窗口 `#181818`、侧栏 `#282828`。
+- 布局改为 **252 px 左侧导航**（`Wi-Fi` / `Desktop` / `OS Upgrade & Recovery`，选中项为胶囊）
+  + 右侧卡片式表单；卡片圆角 12、内边距 16；按钮统一 16 圆角胶囊（主色/灰色/文字三档）。
+- 主题切换放在侧边栏底部（Light / Dark 胶囊）；`NETWORKMGR_THEME=dark` 可在启动时指定，
+  便于分别截图验收两套主题。
+- **egui 0.37 API 变化**：`SidePanel` 已并入 `Panel` 且不再提供固定宽度方法，
+  `exact_width` 不存在。改为自绘两栏背景 + `ui.scope_builder(UiBuilder::new().max_rect(..))`，
+  尺寸完全可控，也更贴近参考图。
+- 功能未变：默认 dry-run，`--apply` 才写；IPv4/IPv6、DHCP/Manual、SLAAC、逐字段校验与预览全部保留。
+  测试 6 passed（原 5 + 主题对比 1）。
+- 截图：`artifacts/cfg-light.png`、`artifacts/cfg-dark.png`（该目录已 gitignore）。
+
+
 
 
 

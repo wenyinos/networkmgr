@@ -14,7 +14,7 @@
 |---|---|
 | [`docs/RUST_REWRITE_PLAN.md`](docs/RUST_REWRITE_PLAN.md) | 完整方案：外部契约冻结、四阶段迁移、A/B/C 验收矩阵、风险登记、ADR、实测记录 |
 | [`rust/`](rust/) | 零依赖 `networkmgr-core`：**65 个契约测试**，覆盖配置校验、`wpa_cli` 输出解析、`ifconfig` / `netstat` / `sysrc` 解析、`rc.conf` / `resolv.conf` 安全写入、WireGuard、托盘状态聚合、MO 翻译目录；另含 `dump-state` 诊断二进制 |
-| [`rust/spikes/`](rust/spikes/) | 三个图形栈程序：eframe/glow 最小窗口、tray-icon 原生菜单托盘、配置窗口骨架（IPv4/IPv6 双标签 + 校验预览） |
+| [`rust/spikes/`](rust/spikes/) | 四个 GUI 程序：eframe/glow 最小窗口、tray-icon 原生菜单托盘、配置窗口（COSMIC 风格，明暗双主题 + IPv4/IPv6 校验预览）、托盘主程序骨架 |
 | [`.github/workflows/freebsd-rust.yml`](.github/workflows/freebsd-rust.yml) | 远端 FreeBSD 15.1 构建：core 测试 + 两个 spike，产出 `networkmgr-freebsd15-spikes` |
 | [`rust/spikes/deploy-to-vm.sh`](rust/spikes/deploy-to-vm.sh) | 把 CI 产物拷进 `freebsd15` VM 实跑验收 |
 
