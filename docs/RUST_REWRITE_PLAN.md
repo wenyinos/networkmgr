@@ -593,7 +593,7 @@ virsh -c qemu:///system net-dhcp-leases default
 
 ### 18.5 仍未关闭 / 边界
 
-- **CI 首次运行**：见第 19 节。CI 只做构建、不启桌面：FreeBSD 上 `appindicator` 后端的编译链接由 CI 验证，但图标是否出现在 Xfce 面板仍**未经 B 类 VM 实跑验证**。第 10 节第 312 / 313 条保持未勾选。
+- **CI 首次运行成功**（见第 19 节）：FreeBSD 15.1 上 `appindicator` 后端的编译链接已验证。但 CI 不启桌面，GLX 起窗与图标是否出现在 Xfce 面板仍**未经 B 类 VM 实跑验证**；需下载 artifact 后跑 `deploy-to-vm.sh`。第 10 节第 312 / 313 条保持未勾选。
 - 第 9 节 P0（VM 无无线网卡）、P1（缺 `ctrl_interface`）不变；真实 `wpa_cli` 正常输出样本仍缺，实体机 `/etc/wpa_supplicant.conf` 与 `wpa_supplicant` 全程未改动。
 - `src/wpa_supplicant.conf` 的 `ctrl_interface_group=operator` 与 `%wheel` 不一致仍只记录未改。
 - 本轮**没有产出可安装的网络管理二进制**：spike 只验证图形栈，业务逻辑仍在 Python 版，阶段 0/1 的功能迁移尚未开始。VM 仍未装 rust/cargo，遵守第 17 节的边界。
@@ -609,9 +609,11 @@ virsh -c qemu:///system net-dhcp-leases default
 | push | `git push -u origin feat/rust-rewrite`，10 个本地提交（`7525a50` … `c744387`）全部推送成功，分支跟踪 `origin/feat/rust-rewrite` |
 | fork 默认分支 | 由 `master` 改为 **`feat/rust-rewrite`**（`gh repo edit wenyinos/networkmgr --default-branch`），`gh api` 回读确认为该值 |
 | 上游 | `ghostbsd/networkmgr` **未改动**，默认分支仍是 `master`；PR #133 仍 OPEN（base `master` / head `wenyinos:i18n/complete-zh-cn`），未受影响 |
-| CI | `.github/workflows/freebsd-rust.yml` 被 push 触发，`FreeBSD 15 Rust build` 首次运行；结果不在此固化，用 `gh run list --repo wenyinos/networkmgr` 复核 |
+| CI | 首次运行 **成功**：run `42375625920`，8m57s，FreeBSD **15.1-RELEASE-p3**；5 个 step 全绿，core **27 passed**、spikes **1 passed**、release 构建 4m56s；`file` 确认两个产物均为 `ELF 64-bit ... (FreeBSD) ... for FreeBSD 15.1`，artifact `networkmgr-freebsd15-spikes`（4.6 MB）已上传 |
 | 本地测试 | core `cargo test` **27 passed**；spikes `cargo test --no-default-features --features sni` **1 passed**；两 crate `cargo fmt --check` 干净；workflow YAML、`prepare` / `run` / 部署脚本 `sh -n` 全通过 |
 | 文档 | 本章与 `AGENTS.md` 第 8 节同步仓库状态；`AGENTS.md`、`.workbuddy/` 仍保持未跟踪、不提交 |
+
+CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprecated` 注解（被强制运行在 Node 24），本次不影响结果；后续可单独升级到 `@v7` 并复跑。另有 `ubuntu-latest` 将迁移到 Ubuntu 26 的 runner 注解，与 FreeBSD guest 内的构建结果无关。
 
 **边界说明**：改的是 **fork** 的默认分支，**不是**把 Rust 版推成上游主线。Python 版仍是上游 `master` 的正式实现；fork 默认分支变化只影响克隆与该 fork 的 PR 默认行为，不改变上游发布流程，也不代表 Rust 版已可交付。第 9 节 P0 / P1 风险、实体机 `ctrl_interface` 缺失、真实 `wpa_cli` 样本缺口均维持原状。
 
