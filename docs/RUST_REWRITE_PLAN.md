@@ -743,6 +743,23 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 
 **仍未做**：配置窗口的「写盘 + `service netif restart`」闭环还没在真机走一遍。`epair` 不承载真实流量，重启后地址是否生效、连通性如何，需要真实网卡或第二块 virtio 网卡。
 
+---
+
+## 25. 阶段 3 托盘骨架（2026-11-07 23:35，提交 `b6eb024` + `a2309f2`）
+
+- `rust/spikes/src/bin/networkmgr.rs`（164 行）：tray-icon 原生菜单骨架。菜单是状态标题（不可点）、
+  `Restart Networking`（实际执行 `service netif restart`）、`Close Network Manager`（退出）；
+  `SPIKE_SECONDS` 到点自动退出。启动日志同时打印一次 `tray_state()` JSON，便于和 Python 版对照。
+- **图标在深色面板上不可见**：`icon_for` 最初把无信号/有线全画成 `(40,40,40)`，Xfce 深色面板上
+  等于没画。改成中心 12×12 浅色 `(210,210,210)` 方块后，VM 截图右上角确认出现
+  （该颜色统计到 64 像素，边框 `(70,70,70)` 384 像素）。
+- **VM 截图全黑两次**：`xfce4-screensaver` 全屏盖在黑屏上。`xfce4-screensaver-command -deactivate`
+  在 FreeBSD 版不支持该参数，改用 `pkill -x xfce4-screensaver`；`xset s off -dpms` 只能防再次激活。
+- **scp 取截图偶尔卡数分钟**：改用 `ssh ... 'base64 <file>' | base64 -d > local`，稳定且快。
+- 未做：动态子菜单（已保存网络、扫描结果、WireGuard）、30 秒被动刷新、
+  `netif restart` 闭环、C 类实机。
+
+
 
 
 
