@@ -148,26 +148,20 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
 
     let state = &snapshot.state;
     let wireless = state.kind == Some("wifi");
+    let label =
+        |template: &'static str, card: &str| networkmgr_core::tr(template).replace("%s", card);
     let headline = match (&state.card, state.connection) {
         (None, _) => networkmgr_core::tr!("Network card is not enabled").to_string(),
         (Some(card), "Connected") => match &state.ssid {
             Some(ssid) => format!("{ssid} ({card})"),
-            None if wireless => networkmgr_core::tr!("WiFi %s Connected").replace("%s", card),
-            None => networkmgr_core::tr!("Wired %s Connected").replace("%s", card),
+            None if wireless => label("WiFi %s Connected", card),
+            None => label("Wired %s Connected", card),
         },
-        (Some(card), "Disabled") if wireless => {
-            networkmgr_core::tr!("WiFi %s Disabled").replace("%s", card)
-        }
-        (Some(card), "Disabled") => {
-            networkmgr_core::tr!("Wired %s Disabled").replace("%s", card)
-        }
-        (Some(card), "Unplug") => networkmgr_core::tr!("Wired %s Unplug").replace("%s", card),
-        (Some(card), "Disconnected") if wireless => {
-            networkmgr_core::tr!("WiFi %s Disconnected").replace("%s", card)
-        }
-        (Some(card), _) => {
-            networkmgr_core::tr!("Wired %s Disconnected").replace("%s", card)
-        }
+        (Some(card), "Disabled") if wireless => label("WiFi %s Disabled", card),
+        (Some(card), "Disabled") => label("Wired %s Disabled", card),
+        (Some(card), "Unplug") => label("Wired %s Unplug", card),
+        (Some(card), "Disconnected") if wireless => label("WiFi %s Disconnected", card),
+        (Some(card), _) => label("Wired %s Disconnected", card),
     };
     title!(menu, &headline);
     let _ = menu.append(&PredefinedMenuItem::separator());
@@ -194,7 +188,8 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
 
     if let Some(card) = &state.card {
         if state.connection == "Disabled" {
-            add!(menu, networkmgr_core::tr!("Enable"), Action::Enable(card.clone()));
+            let enable = networkmgr_core::tr!("Enable");
+            add!(menu, enable, Action::Enable(card.clone()));
         } else {
             add!(
                 menu,
@@ -328,16 +323,16 @@ fn dispatch(action: Action) {
                     thread::spawn(move || connect_new(&nic, &ssid, &security, Some(&psk)));
                 }
             }
-            ConnectPlan::Unsupported => show_message(
-                networkmgr_core::tr!("Enterprise network"),
-                &format!(
-                    "{} {}",
-                    ssid,
-                    networkmgr_core::tr!(
-                        "needs 802.1X credentials; use the configuration window."
-                    )
-                ),
-            ),
+            ConnectPlan::Unsupported => {
+                let hint = networkmgr_core::tr!(concat!(
+                    "needs 802.1X credentials; ",
+                    "use the configuration window."
+                ));
+                show_message(
+                    networkmgr_core::tr!("Enterprise network"),
+                    &format!("{ssid} {hint}"),
+                );
+            }
         },
         Action::Forget { ssid, nic } => {
             thread::spawn(move || forget_network(&nic, &ssid));

@@ -454,9 +454,9 @@ impl ConfigWindow {
                     if pill(ui, theme, "DHCP", self.method4 == Method4::Dhcp).clicked() {
                         self.method4 = Method4::Dhcp;
                     }
-                    if pill(ui, theme, networkmgr_core::tr!("Manual"), self.method4 == Method4::Manual)
-                        .clicked()
-                    {
+                    let manual = networkmgr_core::tr!("Manual");
+                    let picked = self.method4 == Method4::Manual;
+                    if pill(ui, theme, manual, picked).clicked() {
                         self.method4 = Method4::Manual;
                     }
                 });
@@ -467,16 +467,20 @@ impl ConfigWindow {
                         .spacing([18.0, 10.0])
                         .show(ui, |ui| {
                             field(ui, theme, networkmgr_core::tr!("IP address"), &mut self.ip);
-                            field(ui, theme, networkmgr_core::tr!("Subnet mask"), &mut self.netmask);
+                            let subnet = networkmgr_core::tr!("Subnet mask");
+                            field(ui, theme, subnet, &mut self.netmask);
                             field(
                                 ui,
                                 theme,
                                 networkmgr_core::tr!("Default gateway"),
                                 &mut self.gateway,
                             );
-                            field(ui, theme, networkmgr_core::tr!("DNS server 1"), &mut self.dns1);
-                            field(ui, theme, networkmgr_core::tr!("DNS server 2"), &mut self.dns2);
-                            field(ui, theme, networkmgr_core::tr!("Search domain"), &mut self.search);
+                            let dns1_label = networkmgr_core::tr!("DNS server 1");
+                            field(ui, theme, dns1_label, &mut self.dns1);
+                            let dns2_label = networkmgr_core::tr!("DNS server 2");
+                            field(ui, theme, dns2_label, &mut self.dns2);
+                            let search_label = networkmgr_core::tr!("Search domain");
+                            field(ui, theme, search_label, &mut self.search);
                         });
                 }
             }
@@ -487,9 +491,9 @@ impl ConfigWindow {
                     if pill(ui, theme, "SLAAC", self.method6 == Method6::Slaac).clicked() {
                         self.method6 = Method6::Slaac;
                     }
-                    if pill(ui, theme, networkmgr_core::tr!("Manual"), self.method6 == Method6::Manual)
-                        .clicked()
-                    {
+                    let manual = networkmgr_core::tr!("Manual");
+                    let picked = self.method6 == Method6::Manual;
+                    if pill(ui, theme, manual, picked).clicked() {
                         self.method6 = Method6::Manual;
                     }
                 });
@@ -499,8 +503,14 @@ impl ConfigWindow {
                         .num_columns(2)
                         .spacing([18.0, 10.0])
                         .show(ui, |ui| {
-                            field(ui, theme, networkmgr_core::tr!("IPv6 address"), &mut self.ip6);
-                            field(ui, theme, networkmgr_core::tr!("Prefix length"), &mut self.prefix6);
+                            field(
+                                ui,
+                                theme,
+                                networkmgr_core::tr!("IPv6 address"),
+                                &mut self.ip6,
+                            );
+                            let prefix = networkmgr_core::tr!("Prefix length");
+                            field(ui, theme, prefix, &mut self.prefix6);
                             field(
                                 ui,
                                 theme,
@@ -597,7 +607,8 @@ impl ConfigWindow {
             self.nav = Nav::Wifi;
         }
         ui.add_space(4.0);
-        if nav_item(ui, theme, "🖥", networkmgr_core::tr!("Desktop"), self.nav == Nav::Desktop) {
+        let desktop = networkmgr_core::tr!("Desktop");
+        if nav_item(ui, theme, "🖥", desktop, self.nav == Nav::Desktop) {
             self.nav = Nav::Desktop;
         }
         ui.add_space(4.0);
