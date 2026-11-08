@@ -511,8 +511,11 @@ fn dispatch(action: Action, tx: &mpsc::Sender<UiRequest>) {
 }
 
 /// 配置窗口的候选路径：安装后的契约名优先，开发时回退 cargo 产物名。
-const CONFIG_WINDOW_CANDIDATES: &[&str] =
-    &["/usr/local/bin/networkmgr_configuration", "config-window"];
+const CONFIG_WINDOW_CANDIDATES: &[&str] = &[
+    "/usr/local/bin/networkmgr_configuration-rust",
+    "/usr/local/bin/networkmgr_configuration",
+    "config-window",
+];
 
 /// 启动配置窗口并预选网卡；找不到二进制时只记录错误，不阻塞托盘。
 fn open_configuration(nic: &str) {
@@ -1430,7 +1433,7 @@ mod tests {
     fn configuration_candidates_start_with_the_contract_path() {
         assert_eq!(
             CONFIG_WINDOW_CANDIDATES[0],
-            "/usr/local/bin/networkmgr_configuration"
+            "/usr/local/bin/networkmgr_configuration-rust"
         );
     }
 }

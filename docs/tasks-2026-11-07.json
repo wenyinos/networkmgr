@@ -342,6 +342,15 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t40",
+    "title": "发布包改为 networkmgr-rust 以与 Python 版共存",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "独立包名/二进制/desktop/sudoers/devd sample/图标/domain",
+    "criteria": "pkg add 不覆盖官方 networkmgr；安装/卸载通过",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t35",
     "title": "真实 EAP 认证（企业级 AP）",
     "type": "分析",

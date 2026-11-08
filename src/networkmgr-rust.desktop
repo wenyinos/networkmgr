@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=NetworkMgr (Rust)
+Comment=Network Manager
+Exec=sudo networkmgr-rust
+Terminal=false
+Type=Application
+Icon=networkmgr-rust
+Categories=System;Network;
+NoDisplay=false

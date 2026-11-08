@@ -18,7 +18,7 @@ use crate::sys::{Runner, Sys};
 /// 全局无线配置。
 pub const WPA_CONF: &str = "/etc/wpa_supplicant.conf";
 /// 安装时落地的模板。
-pub const WPA_TEMPLATE: &str = "/usr/local/share/networkmgr/wpa_supplicant.conf";
+pub const WPA_TEMPLATE: &str = "/usr/local/share/networkmgr-rust/wpa_supplicant.conf";
 /// `link-down` 留下的运行时标记；`/var/run` 每次开机都会清空。
 pub const LINK_DOWN_MARKER: &str = "/var/run/link-down-";
 

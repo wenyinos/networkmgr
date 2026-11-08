@@ -6,18 +6,25 @@
 
 > **0.1.0 预览版已发布**：GitHub Releases 提供 FreeBSD 15 的 amd64 / aarch64
 > `.pkg`（见 [Releases](https://github.com/wenyinos/networkmgr/releases)）。
-> 尚未进入 FreeBSD port；上游 `ghostbsd/networkmgr` 的 `master` 仍是 Python 版。
+> 包名 **`networkmgr-rust`**，可与官方 Python 版 `networkmgr` 同时安装；
+> 尚未进入 FreeBSD port。
 
 ## 安装（0.1.0）
 
 ```sh
-sudo pkg add ./networkmgr-0.1.0-amd64.pkg
+sudo pkg add ./networkmgr-rust-0.1.0-amd64.pkg
 # 或
-sudo pkg install -y ./networkmgr-0.1.0-amd64.pkg
+sudo pkg install -y ./networkmgr-rust-0.1.0-amd64.pkg
 ```
 
-安装后重新登录桌面会话；托盘通过 XDG 自启动。卸载用 `sudo pkg delete -y networkmgr`。
-发布说明见 [`docs/RELEASE-0.1.0.md`](docs/RELEASE-0.1.0.md)。
+安装后从应用菜单启动「NetworkMgr (Rust)」，或运行 `sudo networkmgr-rust`。
+卸载用 `sudo pkg delete -y networkmgr-rust`。发布说明见
+[`docs/RELEASE-0.1.0.md`](docs/RELEASE-0.1.0.md)。
+
+与 Python 版共存：二进制是 `networkmgr-rust` / `networkmgr_configuration-rust`，
+desktop 放在 `share/applications`（不写 autostart），sudoers 与 devd 规则用独立文件，
+gettext domain 是 `NetworkMgr-rust`。要接管 devd 事件时，把
+`/usr/local/etc/devd/networkmgr-rust.conf.sample` 复制为 `.conf`，并停用 Python 版规则。
 
 ## 仓库内容
 

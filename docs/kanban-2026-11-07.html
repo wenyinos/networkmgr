@@ -13,7 +13,7 @@
   .sub { color:var(--muted); font-size:13px; margin-bottom:8px; }
   .progress { display:flex; align-items:center; gap:10px; margin:12px 0 20px; }
   .bar { flex:1; height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; }
-  .fill { height:100%; background:#34a853; width:97.4%; transition:width .3s; }
+  .fill { height:100%; background:#34a853; width:97.5%; transition:width .3s; }
   .pct { font-size:13px; color:var(--muted); white-space:nowrap; }
   .board { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
   @media (max-width:760px) { .board { grid-template-columns:1fr; } }
@@ -36,7 +36,7 @@
 <body>
 <div class="wrap">
   <h1>NetworkMgr Rust 重写任务看板</h1>
-  <div class="sub">2026-11-07 · 共 39 个任务 · 已完成 38 个</div>
+  <div class="sub">2026-11-07 · 共 40 个任务 · 已完成 39 个</div>
   <div class="progress">
     <div class="bar"><div class="fill"></div></div>
     <span class="pct">95%</span>
@@ -48,7 +48,7 @@
 <div class="kv"><span class="k">完成标准</span><span class="v">PEAP/TTLS/TLS 至少一种在真实 AP 上完成认证</span></div>
 </div></div>
 <div class="col"><div class="col-head"><span class="dot" style="background:#e8a33d"></span>进行中<span class="count">0</span></div></div>
-<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">38</span></div><div class="card">
+<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">39</span></div><div class="card">
 <div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
 <div class="card-title">移植 config：rc.conf 安全写值、resolv.conf、PSK/WEP/Open/EAP 字段</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">rust/src/config.rs（592 行，13 个测试）</span></div>
@@ -263,6 +263,12 @@
 <div class="card-title">release workflow 发布 0.1.0（amd64/aarch64）</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">.github/workflows/release.yml；docs/RELEASE-0.1.0.md</span></div>
 <div class="kv"><span class="k">完成标准</span><span class="v">tag 触发构建两个 pkg 并直接上传 GitHub Release</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">发布包改为 networkmgr-rust 以与 Python 版共存</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">独立包名/二进制/desktop/sudoers/devd sample/图标/domain</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">pkg add 不覆盖官方 networkmgr；安装/卸载通过</span></div>
 </div></div></div>
   <div class="footer">由 goal-driven-autonomous-agent 生成。详细结果见执行报告。</div>
 </div>

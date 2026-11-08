@@ -13,7 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// gettext 域，与 `trayicon.py` 的 `textdomain('NetworkMgr')` 一致。
-pub const DOMAIN: &str = "NetworkMgr";
+pub const DOMAIN: &str = "NetworkMgr-rust";
 
 /// FreeBSD 上 `.mo` 的安装根目录，与 `setup.py` 和数据文件布局一致。
 pub const DEFAULT_LOCALE_DIR: &str = "/usr/local/share/locale";
@@ -355,7 +355,7 @@ mod tests {
         let path = catalog_path(Path::new("/usr/local/share/locale"), "zh_CN");
         assert_eq!(
             path,
-            PathBuf::from("/usr/local/share/locale/zh_CN/LC_MESSAGES/NetworkMgr.mo")
+            PathBuf::from("/usr/local/share/locale/zh_CN/LC_MESSAGES/NetworkMgr-rust.mo")
         );
     }
 
@@ -375,7 +375,7 @@ mod tests {
         let lang_dir = dir.join("de").join("LC_MESSAGES");
         std::fs::create_dir_all(&lang_dir).expect("temp locale dir");
         std::fs::write(
-            lang_dir.join("NetworkMgr.mo"),
+            lang_dir.join("NetworkMgr-rust.mo"),
             build_mo(&[("Apply", "Anwenden")]),
         )
         .expect("write mo");

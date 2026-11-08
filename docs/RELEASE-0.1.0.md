@@ -6,32 +6,39 @@ Rust 重写后的首个预览版本，目标平台 **FreeBSD / GhostBSD / Dragon
 
 | 架构 | 文件 |
 |---|---|
-| FreeBSD 15 amd64 | `networkmgr-0.1.0-amd64.pkg` |
-| FreeBSD 15 aarch64 | `networkmgr-0.1.0-aarch64.pkg` |
+| FreeBSD 15 amd64 | `networkmgr-rust-0.1.0-amd64.pkg` |
+| FreeBSD 15 aarch64 | `networkmgr-rust-0.1.0-aarch64.pkg` |
 
 ## 安装
 
 ```sh
-sudo pkg add ./networkmgr-0.1.0-amd64.pkg
+sudo pkg add ./networkmgr-rust-0.1.0-amd64.pkg
 # 或
-sudo pkg install -y ./networkmgr-0.1.0-amd64.pkg
+sudo pkg install -y ./networkmgr-rust-0.1.0-amd64.pkg
 ```
 
-安装后重新登录桌面会话；托盘通过 XDG 自启动。卸载：
+安装后从应用菜单启动「NetworkMgr (Rust)」，或运行 `sudo networkmgr-rust`。
+卸载：
 
 ```sh
-sudo pkg delete -y networkmgr
+sudo pkg delete -y networkmgr-rust
 ```
 
 ## 包含内容
 
-- `networkmgr`：系统托盘（有线 / 无线 / WireGuard、扫描连接、PSK/WEP/EAP、
+- `networkmgr-rust`：系统托盘（有线 / 无线 / WireGuard、扫描连接、PSK/WEP/EAP、
   隐藏网络、Forget、Disconnect、3 次重试、300 ms 动画、7 种语言）
-- `networkmgr_configuration`：COSMIC 风格配置窗口（以太网 / Wi-Fi / VPN 三页、
+- `networkmgr_configuration-rust`：COSMIC 风格配置窗口（以太网 / Wi-Fi / VPN 三页、
   IPv4/IPv6、DHCP/静态/SLAAC、Wi-Fi 凭据、证书选择器、`--apply` 写盘并重启接口）
 - `networkmgr-devd`：devd attach / link-up / link-down
 - `dump-state`、`apply-config`：诊断命令（含 `--fix-wpa-ctrl`）
 - desktop、sudoers、devd 规则、wpa_supplicant 模板、hicolor 图标、7 个 `.mo`
+
+## 与 Python 版共存
+
+包名、二进制、desktop、sudoers、devd 规则、wpa 模板、图标与 gettext domain
+全部使用独立的 `-rust` 名称，不会覆盖 `net-mgmt/networkmgr`。
+devd 规则以 `.sample` 安装，接管事件时再复制为 `.conf` 并停用旧规则。
 
 ## 已知限制
 

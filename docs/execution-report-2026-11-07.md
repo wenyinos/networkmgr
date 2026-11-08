@@ -460,3 +460,20 @@
   hicolor 图标与 7 个 `.mo`。
 - VM 上 `pkg add` 安装成功，`pkg delete` 后无残留。
 - release workflow 用 tag 触发，构建两个架构后直接上传到 GitHub Release。
+
+### 包名共存改造（2026-11-09）
+
+`networkmgr` 与官方 Python 包同名，无法同时安装；发布前改为独立命名：
+
+| 项 | Python 版 | Rust 版 |
+|---|---|---|
+| 包名 | `networkmgr` | `networkmgr-rust` |
+| 托盘 | `networkmgr` | `networkmgr-rust` |
+| 配置窗口 | `networkmgr_configuration` | `networkmgr_configuration-rust` |
+| desktop | autostart | `share/applications`，不自启动 |
+| sudoers | `networkmgr` | `networkmgr-rust` |
+| devd | `networkmgr.conf` | `networkmgr-rust.conf.sample`（手动启用） |
+| wpa 模板 | `share/networkmgr/` | `share/networkmgr-rust/` |
+| gettext domain | `NetworkMgr` | `NetworkMgr-rust` |
+
+VM 实测：`networkmgr-rust-0.1.0-amd64.pkg` 3.5 MB，安装/卸载通过。

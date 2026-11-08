@@ -1090,4 +1090,10 @@ P1 风险（第 9 节）：老机器的 `/etc/wpa_supplicant.conf` 只有 `netwo
 - VM 实测（amd64）：`networkmgr-0.1.0-amd64.pkg` 4.7 MB / 226 文件；
   `pkg add` 成功，sudoers 权限 440，`pkg delete` 干净卸载。
 - 发布说明：`docs/RELEASE-0.1.0.md`；README 增加 pkg 安装步骤。
-- aarch64 由 QEMU TCG 模拟构建，耗时可能很长；workflow 会如实报告成功/失败。
+- **共存策略**：包名改为 `networkmgr-rust`；二进制 `networkmgr-rust` /
+  `networkmgr_configuration-rust`；desktop 放 `share/applications`（不写 autostart）；
+  sudoers 与 devd 规则用独立文件，devd 以 `.sample` 安装（避免与 Python 版重复处理事件）；
+  wpa 模板放 `share/networkmgr-rust/`；图标改 `-rust`；gettext domain 改为
+  `NetworkMgr-rust`。这样可与官方 `net-mgmt/networkmgr` 同时安装。
+- aarch64 job 改用 GitHub 公开仓库的 `ubuntu-24.04-arm` runner，在同架构上跑
+  FreeBSD arm64 VM，比 x86 TCG 跨架构模拟快。
