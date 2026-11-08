@@ -403,3 +403,15 @@ msgstr "Добавить ctrl_interface в /etc/wpa_supplicant.conf? Резер�
 msgid "Fix"
 msgstr "Исправить"
 
+msgid "Connect to Hidden Network"
+msgstr "Подключиться к скрытой сети"
+
+msgid "Open network"
+msgstr "Открытая сеть"
+
+msgid "Browse"
+msgstr "Обзор"
+
+msgid "Select Certificate"
+msgstr "Выбрать сертификат"
+

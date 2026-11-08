@@ -6,6 +6,7 @@
 //! 功能边界没变：默认只做校验与预览，`--apply` 才真的写 `rc.conf` 与
 //! `/etc/resolv.conf`；不重启接口。`SPIKE_SECONDS` 到点自动关闭。
 
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
@@ -238,8 +239,18 @@ struct ConfigWindow {
     eap_key_password: String,
     wifi_status: String,
     wpa_ready: Option<bool>,
+    picker_target: Option<CertTarget>,
+    picker_dir: Option<PathBuf>,
+    picker_entries: Vec<(String, bool)>,
     vpn_status: String,
     runner: RealRunner,
+}
+
+#[derive(Clone, Copy)]
+enum CertTarget {
+    Ca,
+    Client,
+    Key,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -294,6 +305,9 @@ impl Default for ConfigWindow {
             eap_key_password: String::new(),
             wifi_status: String::new(),
             wpa_ready: None,
+            picker_target: None,
+            picker_dir: None,
+            picker_entries: Vec::new(),
             vpn_status: String::new(),
             runner: RealRunner::new(),
         }
@@ -725,6 +739,52 @@ impl ConfigWindow {
     }
 
     /// Wi-Fi 凭据：PSK / EAP / 开放网络。默认 dry-run，`--apply` 才写 daemon。
+    fn open_cert_picker(&mut self, target: CertTarget) {
+        self.picker_target = Some(target);
+        let preferred = std::path::Path::new("/etc/ssl");
+        self.picker_dir = Some(if preferred.is_dir() {
+            preferred.to_path_buf()
+        } else {
+            PathBuf::from("/")
+        });
+        self.load_picker_entries();
+    }
+
+    fn load_picker_entries(&mut self) {
+        let Some(dir) = &self.picker_dir else {
+            return;
+        };
+        let mut entries = Vec::new();
+        if let Ok(read) = std::fs::read_dir(dir) {
+            for entry in read.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
+                if is_dir
+                    || name.ends_with(".pem")
+                    || name.ends_with(".crt")
+                    || name.ends_with(".cer")
+                    || name.ends_with(".key")
+                {
+                    entries.push((name, is_dir));
+                }
+            }
+        }
+        entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        self.picker_entries = entries;
+    }
+
+    fn apply_picker_choice(&mut self, path: String) {
+        match self.picker_target {
+            Some(CertTarget::Ca) => self.eap_ca = path,
+            Some(CertTarget::Client) => self.eap_client_cert = path,
+            Some(CertTarget::Key) => self.eap_private_key = path,
+            None => {}
+        }
+        self.picker_target = None;
+        self.picker_dir = None;
+        self.picker_entries.clear();
+    }
+
     /// 给 `/etc/wpa_supplicant.conf` 补 `ctrl_interface`，不自动重启服务。
     fn fix_wpa_ctrl(&mut self) {
         match networkmgr_core::config::fix_ctrl_interface_file("/etc/wpa_supplicant.conf") {
@@ -776,6 +836,7 @@ impl ConfigWindow {
             }
         });
         ui.add_space(6.0);
+        let mut picker_request: Option<CertTarget> = None;
         match self.wifi_security {
             WifiSecurity::Psk => {
                 ui.horizontal(|ui| {
@@ -821,17 +882,21 @@ impl ConfigWindow {
                             &mut self.eap_identity,
                         );
                         if tls {
-                            field(
+                            cert_row(
                                 ui,
                                 theme,
                                 networkmgr_core::tr!("Client Cert:"),
                                 &mut self.eap_client_cert,
+                                CertTarget::Client,
+                                &mut picker_request,
                             );
-                            field(
+                            cert_row(
                                 ui,
                                 theme,
                                 networkmgr_core::tr!("Private Key:"),
                                 &mut self.eap_private_key,
+                                CertTarget::Key,
+                                &mut picker_request,
                             );
                             ui.label(
                                 RichText::new(networkmgr_core::tr!("Key Password:"))
@@ -876,15 +941,20 @@ impl ConfigWindow {
                                 });
                             ui.end_row();
                         }
-                        field(
+                        cert_row(
                             ui,
                             theme,
                             networkmgr_core::tr!("CA Certificate:"),
                             &mut self.eap_ca,
+                            CertTarget::Ca,
+                            &mut picker_request,
                         );
                     });
             }
             WifiSecurity::Open => {}
+        }
+        if let Some(target) = picker_request {
+            self.open_cert_picker(target);
         }
         ui.add_space(8.0);
         if primary_button(ui, theme, networkmgr_core::tr!("Apply")).clicked() {
@@ -904,6 +974,44 @@ impl ConfigWindow {
 fn field(ui: &mut egui::Ui, theme: &Theme, label: &str, value: &mut String) {
     ui.label(RichText::new(label).size(13.0).color(theme.text));
     ui.add(egui::TextEdit::singleline(value).desired_width(220.0));
+    ui.end_row();
+}
+
+/// 文件选择器的一行：整行可点，文字左对齐，hover 时高亮。
+fn picker_row(ui: &mut egui::Ui, theme: &Theme, label: &str, width: f32) -> bool {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 26.0), egui::Sense::click());
+    let fill = if response.hovered() {
+        theme.card_hover
+    } else {
+        Color32::TRANSPARENT
+    };
+    ui.painter().rect_filled(rect, 4.0, fill);
+    ui.painter().text(
+        rect.left_center() + egui::vec2(10.0, 0.0),
+        egui::Align2::LEFT_CENTER,
+        label,
+        egui::FontId::proportional(13.0),
+        theme.text,
+    );
+    response.clicked()
+}
+
+/// 证书路径一行：输入框 + 「浏览」。
+fn cert_row(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    label: &str,
+    value: &mut String,
+    target: CertTarget,
+    request: &mut Option<CertTarget>,
+) {
+    ui.label(RichText::new(label).size(13.0).color(theme.text));
+    ui.horizontal(|ui| {
+        ui.add(egui::TextEdit::singleline(value).desired_width(170.0));
+        if secondary_button(ui, theme, networkmgr_core::tr!("Browse")).clicked() {
+            *request = Some(target);
+        }
+    });
     ui.end_row();
 }
 
@@ -1075,6 +1183,73 @@ impl eframe::App for ConfigWindow {
                 });
             },
         );
+
+        if self.picker_dir.is_some() {
+            let dir = self.picker_dir.clone().expect("checked above");
+            let entries = self.picker_entries.clone();
+            let mut open_dir: Option<PathBuf> = None;
+            let mut chosen: Option<String> = None;
+            let mut go_up = false;
+            let mut close = false;
+            egui::Window::new(networkmgr_core::tr!("Select Certificate"))
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .pivot(egui::Align2::CENTER_CENTER)
+                .fixed_size(egui::vec2(460.0, 430.0))
+                .show(ui.ctx(), |ui| {
+                    ui.label(
+                        RichText::new(dir.display().to_string())
+                            .monospace()
+                            .size(11.0)
+                            .color(theme.muted),
+                    );
+                    ui.separator();
+                    egui::ScrollArea::vertical()
+                        .max_height(300.0)
+                        .show(ui, |ui| {
+                            let width = ui.available_width();
+                            if picker_row(ui, &theme, "📁 ..", width) {
+                                go_up = true;
+                            }
+                            for (name, is_dir) in &entries {
+                                let label = if *is_dir {
+                                    format!("📁 {name}")
+                                } else {
+                                    format!("📄 {name}")
+                                };
+                                if picker_row(ui, &theme, &label, width) {
+                                    if *is_dir {
+                                        open_dir = Some(dir.join(name));
+                                    } else {
+                                        chosen = Some(dir.join(name).display().to_string());
+                                    }
+                                }
+                            }
+                        });
+                    ui.separator();
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if secondary_button(ui, &theme, networkmgr_core::tr!("Cancel")).clicked() {
+                            close = true;
+                        }
+                    });
+                });
+            if let Some(path) = open_dir {
+                self.picker_dir = Some(path);
+                self.load_picker_entries();
+            } else if let Some(path) = chosen {
+                self.apply_picker_choice(path);
+            } else if go_up {
+                if let Some(parent) = dir.parent() {
+                    self.picker_dir = Some(parent.to_path_buf());
+                    self.load_picker_entries();
+                }
+            } else if close {
+                self.picker_dir = None;
+                self.picker_target = None;
+                self.picker_entries.clear();
+            }
+        }
     }
 }
 
@@ -1168,6 +1343,9 @@ fn main() -> eframe::Result<()> {
                 "wireless" => window.switch_nav(Nav::Wireless),
                 "vpn" => window.switch_nav(Nav::Vpn),
                 _ => {}
+            }
+            if std::env::var("NETWORKMGR_CERT_PICKER").is_ok() {
+                window.open_cert_picker(CertTarget::Ca);
             }
             if let Some(nic) = requested {
                 let wireless = nic.contains("wlan");

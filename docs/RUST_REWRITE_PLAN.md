@@ -1068,3 +1068,13 @@ P1 风险（第 9 节）：老机器的 `/etc/wpa_supplicant.conf` 只有 `netwo
 
 
 
+
+## 39. 隐藏网络与证书选择器（2026-11-08 23:40）
+
+- 托盘「可用连接」子菜单新增「连接到隐藏网络」：SSID + 口令，或勾选「开放网络」；
+  走与扫描结果相同的 `connect_new` 流程（失败重试、连上才保存）。
+- 配置窗口 EAP 表单的 CA / Client Cert / Private Key 增加「浏览」按钮；
+  内置简易文件选择器：从 `/etc/ssl` 开始、目录可进入/上一级、只列
+  `.pem`/`.crt`/`.cer`/`.key`，窗口居中、整行左对齐、hover 高亮。
+- 新增文案（Connect to Hidden Network / Open network / Browse / Select Certificate）进 7 个 po。
+- 测试：core **104**、GUI **12**。

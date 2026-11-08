@@ -403,3 +403,15 @@ msgstr "Adicionar ctrl_interface a /etc/wpa_supplicant.conf? Um backup é mantid
 msgid "Fix"
 msgstr "Corrigir"
 
+msgid "Connect to Hidden Network"
+msgstr "Conectar a rede oculta"
+
+msgid "Open network"
+msgstr "Rede aberta"
+
+msgid "Browse"
+msgstr "Procurar"
+
+msgid "Select Certificate"
+msgstr "Selecionar certificado"
+

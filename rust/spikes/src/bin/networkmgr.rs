@@ -71,6 +71,7 @@ enum Action {
     Restart(Option<String>),
     Close,
     Scan(String),
+    ConnectHidden(String),
     Configure(String),
     Disconnect(String),
     FixWpaCtrl,
@@ -338,6 +339,11 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
             networkmgr_core::tr!("Scan for Networks"),
             Action::Scan(nic.clone())
         );
+        add!(
+            submenu,
+            networkmgr_core::tr!("Connect to Hidden Network"),
+            Action::ConnectHidden(nic.clone())
+        );
         let saved_ids: HashMap<&str, &str> = snapshot
             .saved
             .iter()
@@ -462,6 +468,17 @@ fn dispatch(action: Action, tx: &mpsc::Sender<UiRequest>) {
                 }
                 let _ = tx.send(UiRequest::Refresh);
             });
+        }
+        Action::ConnectHidden(nic) => {
+            if let Some((ssid, psk)) = ask_hidden_network() {
+                let security = if psk.is_some() { "WPA2-PSK" } else { "OPEN" };
+                let tx = tx.clone();
+                thread::spawn(move || {
+                    let runner = RealRunner::new();
+                    let sys = Sys::new(&runner);
+                    connect_new(&sys, &nic, &ssid, security, psk.as_deref(), 0, tx);
+                });
+            }
         }
         Action::Disconnect(nic) => {
             let tx = tx.clone();
@@ -894,6 +911,72 @@ fn ask_password(ssid: &str) -> Option<String> {
 #[cfg(not(feature = "appindicator"))]
 fn ask_password(ssid: &str) -> Option<String> {
     eprintln!("networkmgr: password prompt for {ssid} needs the appindicator (GTK) backend");
+    None
+}
+
+/// 手动连接隐藏网络：SSID + 口令，或勾选「开放网络」。
+#[cfg(feature = "appindicator")]
+fn ask_hidden_network() -> Option<(String, Option<String>)> {
+    use gtk::prelude::*;
+    let dialog = gtk::Dialog::with_buttons(
+        Some(networkmgr_core::tr!("Connect to Hidden Network")),
+        None::<&gtk::Window>,
+        gtk::DialogFlags::MODAL,
+        &[
+            (networkmgr_core::tr!("Cancel"), gtk::ResponseType::Cancel),
+            (networkmgr_core::tr!("Connect"), gtk::ResponseType::Ok),
+        ],
+    );
+    dialog.set_default_response(gtk::ResponseType::Ok);
+    let grid = gtk::Grid::new();
+    grid.set_row_spacing(6);
+    grid.set_column_spacing(12);
+
+    let ssid_label = gtk::Label::new(Some("SSID"));
+    ssid_label.set_xalign(0.0);
+    let ssid = gtk::Entry::new();
+    ssid.set_hexpand(true);
+    grid.attach(&ssid_label, 0, 0, 1, 1);
+    grid.attach(&ssid, 1, 0, 1, 1);
+
+    let password_label = gtk::Label::new(Some(networkmgr_core::tr!("Password:")));
+    password_label.set_xalign(0.0);
+    let password = gtk::Entry::new();
+    password.set_visibility(false);
+    password.set_hexpand(true);
+    grid.attach(&password_label, 0, 1, 1, 1);
+    grid.attach(&password, 1, 1, 1, 1);
+
+    let open = gtk::CheckButton::with_label(networkmgr_core::tr!("Open network"));
+    grid.attach(&open, 1, 2, 1, 1);
+    let password_toggle = password.clone();
+    open.connect_toggled(move |check| {
+        password_toggle.set_sensitive(!check.active());
+    });
+
+    dialog.content_area().add(&grid);
+    dialog.show_all();
+    let response = dialog.run();
+    let ssid_text = ssid.text().to_string();
+    let password_text = password.text().to_string();
+    let is_open = open.active();
+    dialog.close();
+
+    if response != gtk::ResponseType::Ok || ssid_text.is_empty() {
+        return None;
+    }
+    if is_open {
+        Some((ssid_text, None))
+    } else if password_text.is_empty() {
+        None
+    } else {
+        Some((ssid_text, Some(password_text)))
+    }
+}
+
+#[cfg(not(feature = "appindicator"))]
+fn ask_hidden_network() -> Option<(String, Option<String>)> {
+    eprintln!("networkmgr: hidden network prompt needs the appindicator (GTK) backend");
     None
 }
 

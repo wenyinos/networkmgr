@@ -403,3 +403,15 @@ msgstr "Lägg till ctrl_interface i /etc/wpa_supplicant.conf? En säkerhetskopia
 msgid "Fix"
 msgstr "Reparera"
 
+msgid "Connect to Hidden Network"
+msgstr "Anslut till dolt nätverk"
+
+msgid "Open network"
+msgstr "Öppet nätverk"
+
+msgid "Browse"
+msgstr "Bläddra"
+
+msgid "Select Certificate"
+msgstr "Välj certifikat"
+

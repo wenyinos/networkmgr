@@ -306,6 +306,24 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t36",
+    "title": "托盘手动连接隐藏网络",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "SSID + 口令 / 开放网络对话框；复用 connect_new",
+    "criteria": "开放网络无需口令；PSK 至少 8 位；失败走重试",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t37",
+    "title": "配置窗口证书文件选择器",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "CA / Client / Key 的浏览按钮 + 内置选择器",
+    "criteria": "居中显示、列表左对齐、只列证书后缀",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t35",
     "title": "真实 EAP 认证（企业级 AP）",
     "type": "分析",

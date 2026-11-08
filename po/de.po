@@ -403,3 +403,15 @@ msgstr "ctrl_interface zu /etc/wpa_supplicant.conf hinzufügen? Eine Sicherung w
 msgid "Fix"
 msgstr "Reparieren"
 
+msgid "Connect to Hidden Network"
+msgstr "Mit verstecktem Netzwerk verbinden"
+
+msgid "Open network"
+msgstr "Offenes Netzwerk"
+
+msgid "Browse"
+msgstr "Durchsuchen"
+
+msgid "Select Certificate"
+msgstr "Zertifikat auswählen"
+

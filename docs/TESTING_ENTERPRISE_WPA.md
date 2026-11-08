@@ -164,16 +164,21 @@ ifconfig wlan0 create wlandev ath0 wlanmode hostap
 hostapd /usr/local/etc/hostapd.conf
 ```
 
-## Testing with NetworkMgr
+## Testing with NetworkMgr (Rust)
 
-1. Scan for networks - the TestEnterprise network should show as WPA2-EAP
-2. Click on the network to open the Enterprise Authentication dialog
-3. Enter test credentials:
+1. Start the tray (`networkmgr`) or the config window (`networkmgr_configuration`).
+2. Wi-Fi page → scan → click `TestEnterprise`（应显示为 WPA2-EAP）。
+3. In the Enterprise Authentication dialog:
    - EAP Method: PEAP
    - Inner Auth: MSCHAPV2
    - Username: testuser
    - Password: testpassword
-   - CA Certificate: /usr/local/etc/raddb/certs/ca.pem (or leave empty for testing)
+   - CA Certificate: `/usr/local/etc/raddb/certs/ca.pem`（点「浏览」选择；纯测试可留空）
+4. For TLS, switch EAP Method to `TLS` and fill Client Cert / Private Key / Key Password.
+5. After a successful connection, check `ls -l /etc/wpa_supplicant.conf`（应为 `0600 root wheel`）。
+
+> 托盘与配置窗口的 EAP 表单字段一致；配置窗口的「应用」只在 `--apply` 时写盘，
+> 托盘的连接流程在连上后才 `save_config`。
 
 ## Testing with wpa_supplicant directly
 
@@ -226,12 +231,15 @@ wpa_cli -i wlan0 scan_results
 
 ## Unit Tests
 
-Run the enterprise WPA unit tests:
+Rust 侧不需要显示环境：
 
 ```bash
-cd /path/to/networkmgr
-pytest -v tests/unit/test_enterprise_wpa.py
+cd rust
+cargo test
 ```
+
+EAP 字段顺序、`phase2` 的 `auth=` / `autheap=` 分支、TLS 不写 password/phase2
+等由 `config.rs` 的单元测试覆盖；FreeBSD 上的 appindicator 编译由 CI 负责。
 
 ## Security Notes
 

@@ -395,3 +395,15 @@ msgstr "在 /etc/wpa_supplicant.conf 中加入 ctrl_interface？会保留备份�
 msgid "Fix"
 msgstr "修复"
 
+msgid "Connect to Hidden Network"
+msgstr "连接到隐藏网络"
+
+msgid "Open network"
+msgstr "开放网络"
+
+msgid "Browse"
+msgstr "浏览"
+
+msgid "Select Certificate"
+msgstr "选择证书"
+

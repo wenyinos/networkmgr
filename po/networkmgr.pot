@@ -393,3 +393,15 @@ msgstr ""
 msgid "Fix"
 msgstr ""
 
+msgid "Connect to Hidden Network"
+msgstr ""
+
+msgid "Open network"
+msgstr ""
+
+msgid "Browse"
+msgstr ""
+
+msgid "Select Certificate"
+msgstr ""
+
