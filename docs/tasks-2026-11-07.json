@@ -171,6 +171,24 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t21",
+    "title": "设计 NetworkMgr 应用图标（完整版与小尺寸简化版）",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "2 个 SVG + 13 个 hicolor 尺寸 PNG",
+    "criteria": "16 px 清晰可辨；深色面板与浅色面板都可见",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t22",
+    "title": "配置窗口与 desktop 快捷方式接入图标",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "networkmgr-64.rgba + with_icon()；Icon=networkmgr；README 截图",
+    "criteria": "明暗主题标题栏左上角显示图标；desktop 引用 hicolor 名称",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",

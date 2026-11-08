@@ -35,6 +35,9 @@
 > 截图来自本机实跑（`LANG=zh_CN.UTF-8`，`NETWORKMGR_THEME=light|dark`），不是设计稿。
 > 默认 dry-run，只有 `--apply` 才会写入 `rc.conf` 与 `resolv.conf`。
 > 7 种现有语言都已补齐配置窗口条目；`de_DE` 这类区域名会回退到基语言 `de`。
+>
+> 窗口左上角与桌面快捷方式使用同一套应用图标：`src/icons/scalable/apps/networkmgr.svg`
+> 及其 13 个 hicolor 尺寸；配置窗口内嵌 64×64 RGBA，不依赖图像解码库。
 
 ## 本地开发
 

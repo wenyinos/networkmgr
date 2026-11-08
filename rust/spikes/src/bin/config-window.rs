@@ -685,6 +685,20 @@ impl eframe::App for ConfigWindow {
     }
 }
 
+/// 窗口图标：64×64 RGBA，由 `src/icons/scalable/apps/networkmgr.svg` 生成。
+///
+/// 用原始 RGBA 而不是 PNG，是为了不引入图像解码依赖；`IconData` 本来就吃
+/// 未预乘的 RGBA 字节。
+const WINDOW_ICON: &[u8] = include_bytes!("../../assets/networkmgr-64.rgba");
+
+fn window_icon() -> egui::IconData {
+    egui::IconData {
+        rgba: WINDOW_ICON.to_vec(),
+        width: 64,
+        height: 64,
+    }
+}
+
 fn main() -> eframe::Result<()> {
     networkmgr_core::i18n::init();
     let limit = std::env::var("SPIKE_SECONDS")
@@ -699,6 +713,7 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([900.0, 640.0])
+            .with_icon(window_icon())
             .with_title(networkmgr_core::tr!("NetworkMgr configuration")),
         renderer: eframe::Renderer::Glow,
         ..Default::default()

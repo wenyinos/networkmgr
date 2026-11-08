@@ -907,6 +907,19 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
   `cargo build --release --locked` 在 FreeBSD 15.1 上 3 分 37 秒产出 1.5 MB 托盘二进制。
 - 配置窗口与新增菜单项没有 `.po` 条目，按指令不补翻译；需要中文时必须另行补条目。
 
+## 30. 应用图标与窗口图标（2026-11-08 19:10）
+
+- 设计：蓝色渐变圆角方块（`#0B87C9 → #005E8A`）+ 白色三节点网络拓扑。
+  32 px 以上用带连线的完整版；16/20/24 px 用专用简化版（三个大圆点），
+  否则线条和节点在 16 px 下会糊成一团。
+- 资产：`src/icons/scalable/apps/networkmgr.svg`（完整）与 `networkmgr-small.svg`（小尺寸），
+  `src/icons/{16,20,24,32,36,48,64,72,96,128,192,256,512}/apps/networkmgr.png` 共 13 个尺寸。
+- 窗口图标：`rust/spikes/assets/networkmgr-64.rgba`（64×64 未预乘 RGBA），
+  配置窗口通过 `ViewportBuilder::with_icon()` 直接加载，不引入图像解码依赖。
+- 快捷方式：`src/networkmgr.desktop` 增加 `Icon=networkmgr`，对应 hicolor 的安装布局。
+- 验证：本机实跑配置窗口，明暗两套标题栏左上角都显示新图标；
+  README 的 `config-light.png` / `config-dark.png` 已换成带图标的版本。
+
 
 
 
