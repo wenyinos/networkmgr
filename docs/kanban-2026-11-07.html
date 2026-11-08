@@ -36,19 +36,19 @@
 <body>
 <div class="wrap">
   <h1>NetworkMgr Rust 重写任务看板</h1>
-  <div class="sub">2026-11-07 · 共 34 个任务 · 已完成 33 个</div>
+  <div class="sub">2026-11-07 · 共 35 个任务 · 已完成 34 个</div>
   <div class="progress">
     <div class="bar"><div class="fill"></div></div>
     <span class="pct">95%</span>
   </div>
   <div class="board"><div class="col"><div class="col-head"><span class="dot" style="background:#9aa0a6"></span>待办<span class="count">1</span></div><div class="card">
 <div class="card-head"><span class="tag" style="background:#f472b6">分析</span><span class="status" style="color:#9aa0a6;border-color:#9aa0a6">待办</span></div>
-<div class="card-title">C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）</div>
-<div class="kv"><span class="k">预计产出</span><span class="v">X200-BSD 或 GhostBSD 实机记录</span></div>
-<div class="kv"><span class="k">完成标准</span><span class="v">真实 wpa_cli 样本 + 无线连接全流程走通</span></div>
+<div class="card-title">真实 EAP 认证（企业级 AP）</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">企业级 AP + FreeRADIUS 环境记录</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">PEAP/TTLS/TLS 至少一种在真实 AP 上完成认证</span></div>
 </div></div>
 <div class="col"><div class="col-head"><span class="dot" style="background:#e8a33d"></span>进行中<span class="count">0</span></div></div>
-<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">33</span></div><div class="card">
+<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">34</span></div><div class="card">
 <div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
 <div class="card-title">移植 config：rc.conf 安全写值、resolv.conf、PSK/WEP/Open/EAP 字段</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">rust/src/config.rs（592 行，13 个测试）</span></div>
@@ -233,6 +233,12 @@
 <div class="card-title">修复 wpa_supplicant.conf 缺 ctrl_interface 的 P1 风险</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">ensure/fix_ctrl_interface；apply-config --fix-wpa-ctrl；UI 提示</span></div>
 <div class="kv"><span class="k">完成标准</span><span class="v">备份/0600/幂等；配置窗口与托盘可见修复入口；不自动重启服务</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#f472b6">分析</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">真实无线 / 连接动画 / WireGuard 验收（按当前边界关闭）</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">驱动层扫描/关联尝试 + 模拟 UI + CI 编译；用户决定不再等待硬件</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">MT7601U 扫描可用、关联受 FreeBSD 15 驱动限制；动画/WG 由代码与模拟覆盖</span></div>
 </div></div></div>
   <div class="footer">由 goal-driven-autonomous-agent 生成。详细结果见执行报告。</div>
 </div>

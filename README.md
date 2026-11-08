@@ -106,7 +106,7 @@ VM 绿灯不等于验收完成；阶段 3 结束必须同时有 B 与 C 的记�
 - 老机器的 `wpa_supplicant.conf` 可能缺 `ctrl_interface`，导致 `wpa_cli` 全链路不可用。
   配置窗口与托盘会检测并显示「修复控制接口」，等价于
   `apply-config --fix-wpa-ctrl`：备份后写入、chmod 0600，需手动重启 `wpa_supplicant` 生效。
-- 真实 `wpa_cli` 正常输出样本仍缺，解析层由标准格式 mock 样本覆盖；
-  VM 无无线网卡，Wi-Fi 全流程必须等 C 类实机。
+- 真实无线关联受 FreeBSD 15 驱动限制：MT7601U 能扫描但关联超时，AR9271 已无
+  `athn` 驱动；UI/状态层由模拟验证，**真实 EAP 认证仍需企业级 AP**。
 - `service netif restart` 在 VM 上实测会让 SSH 掉线且不自动恢复（需重启机器），
   托盘里的 `Restart Networking` 已改为二次确认 + 只重启当前网卡。

@@ -298,11 +298,20 @@
   },
   {
     "id": "t8",
-    "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
+    "title": "真实无线 / 连接动画 / WireGuard 验收（按当前边界关闭）",
+    "type": "分析",
+    "status": "done",
+    "deliverable": "驱动层扫描/关联尝试 + 模拟 UI + CI 编译；用户决定不再等待硬件",
+    "criteria": "MT7601U 扫描可用、关联受 FreeBSD 15 驱动限制；动画/WG 由代码与模拟覆盖",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t35",
+    "title": "真实 EAP 认证（企业级 AP）",
     "type": "分析",
     "status": "todo",
-    "deliverable": "X200-BSD 或 GhostBSD 实机记录",
-    "criteria": "真实 wpa_cli 样本 + 无线连接全流程走通",
+    "deliverable": "企业级 AP + FreeRADIUS 环境记录",
+    "criteria": "PEAP/TTLS/TLS 至少一种在真实 AP 上完成认证",
     "report": "execution-report-2026-11-07.md"
   }
 ]
