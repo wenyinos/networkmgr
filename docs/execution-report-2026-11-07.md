@@ -173,3 +173,45 @@
 - 导航图标仍是 emoji，未换成 `src/icons/` 的 PNG。
 - 卡片与窗口背景对比度偏柔和，可按需再拉开。
 - 阶段 3 剩余项（扫描连接流程、300 ms 动画、Forget）与 C 类实机未变。
+
+---
+
+## 第六轮（09:00–09:20）：托盘连接流程、Forget 与 Restart 确认
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 18 | 补 `wpa` 连接字段与 `add/set/enable/select/remove/reconfigure` 命令层 | 构建 | `wpa.rs` +75 行 / 4 测试，`sys.rs` +210 行 / 6 测试 | ✅ 完成 |
+| 19 | 托盘接线：扫描连接、PSK/WEP 密码框、Forget 子菜单、连上才保存 | 构建 | `networkmgr.rs` +320 行 / 1 测试 | ✅ 完成 |
+| 20 | Restart Networking 加确认框并改为分接口重启 | 构建 | 同上，截图 `docs/images/restart-confirm.png` | ✅ 完成 |
+| 21 | FreeBSD CI 与 VM 实机验收 | 分析 | CI run `42463440516`；VM 截图与日志 | ✅ 完成（限有线） |
+
+### 关键结果
+
+- **连接流程对齐 Python**：已保存网络直接 `select_network`；开放网络建块即连；
+  PSK/WEP 弹 GTK 密码框；企业级提示走配置窗口。新建块任一步失败自动删除，
+  连上之后才 `save_config`，结束后 `enable_network all` 恢复其他网络。
+- **Forget 改为子菜单**：列出全部已保存网络（包括不在扫描范围内的），
+  倒序删除同名块后持久化；没有确认框，与 Python 行为一致。
+- **Restart 确认框**：VM 实测无参数 `service netif restart` 会让 SSH 长时间不恢复，
+  现在必须先确认，且只重启当前默认网卡。
+- **rustfmt 版本差异**：本机旧版不换行、CI 新版要求换行，CI 首跑失败；
+  改成两版都接受的多行 `let connected_here = ...` 后通过（`a1bbaa3`）。
+- 测试：core **86 passed**、GUI **10 passed**、`cargo fmt --check` 干净；
+  CI 在 FreeBSD 15.1 编译出 1.5 MB 的 `networkmgr`。
+
+### VM 验收（B 类）
+
+- 以 zemin 身份运行（root 连不上 zemin 的 session bus，dbus EXTERNAL auth 拒绝）。
+- 托盘启动输出正确的状态 JSON，面板出现 22×22 托盘图标；
+  左键菜单显示 `Wired vtnet0 Connected` / `Disable vtnet0` / `Configure vtnet0` /
+  `Restart Networking` / `Close Network Manager`。
+- 用 `xdotool` 键盘导航触发 Restart，确认框显示
+  `Restart networking on vtnet0?` + 断线提示 + Cancel/Restart；
+  点 Cancel 后 `vtnet0` 仍 active、IP 不变、SSH 未断，日志无重启记录。
+
+### 未执行 / 仍关闭
+
+- **VM 无无线网卡**：扫描连接、密码框、Forget 的真实链路无法在 B 类环境走通，
+  只能靠 FakeRunner 单测与 CI 编译覆盖，仍需 C 类实机。
+- 300 ms 连接动画、企业级 EAP 凭据收集仍未实现。
+- 测试环境变更：VM 内用 `pkg install` 装了 `xdotool` 仅用于菜单点击，不属于项目依赖。

@@ -825,6 +825,40 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - 截图：**`docs/images/config-light.png`、`docs/images/config-dark.png`**（已入库，README「界面预览」引用）；
   原始全屏图留在 `artifacts/`（gitignore）。
 
+## 28. 托盘连接流程与 Restart 安全化（2026-11-08 09:00，提交 `327c3f2` + `a1bbaa3`）
+
+### 连接与 Forget
+
+- `wpa.rs` 新增 `connect_fields()`：PSK / WPA2-PSK / WPA3-SAE / WEP / OPEN 的字段与顺序
+  逐项对齐 Python `save_psk_network` / `save_open_network`，WEP 的 hex/ASCII 判定也原样保留；
+  `parse_network_id()` 取 `add_network` 应答的最后一行数字。
+- `sys.rs` 新增 `wpa_add_network` / `wpa_set_network` / `wpa_enable_network` /
+  `wpa_select_network` / `wpa_remove_network` / `wpa_reconfigure`，以及三个组合操作：
+  `wpa_save_network()`（任一步失败自动删除半成品）、`wpa_remove_by_ssid()`（从最大 id 倒序删除，
+  避免删除后 id 前移）、`wpa_wait_for_connection()`（`COMPLETED` 且 SSID 匹配才算成功）。
+- 托盘：已保存网络直接 `select_network`；开放网络直接建块；PSK/WEP 弹 GTK 密码框；
+  企业级提示改用配置窗口。**连上才 `save_config`**，新建块失败即删，结束后
+  `enable_network all` 恢复被 `select_network` 禁用的其他网络。
+- `Forget Network` 改为子菜单，列出全部已保存网络（包括不在扫描范围内的），删除后持久化。
+
+### Restart Networking
+
+- 点击后先弹 GTK 确认框（截图 `docs/images/restart-confirm.png`），确认后执行
+  `service netif restart <当前网卡>`；只有拿不到默认网卡时才退化为全量重启。
+- 动机是第 26 节的实测：无参数 `service netif restart` 会让 SSH 掉线且不自动恢复。
+
+### 验证
+
+- core **86 passed**（原 76 + 10），GUI **10 passed**（networkmgr 3 + config-window 6 + tray-status 1），
+  `cargo fmt --check` 干净；CI run `42463440516` 在 FreeBSD 15.1 编译通过。
+- VM（B 类）：新二进制启动、状态 JSON 与 Python 版一致、面板图标出现、菜单渲染正确
+  （`Wired vtnet0 Connected` / Disable / Configure / Restart / Close）；
+  键盘导航触发 Restart 后确认框正确显示，点 Cancel 后 `vtnet0` 保持 active、SSH 未断。
+- **仍未验证**：VM 无无线网卡，扫描连接、密码框、Forget 的真实链路未在实机走通；
+  300 ms 连接动画未实现；企业级 EAP 凭据仍由配置窗口收集。
+- VM 环境注意：root 无法连接 zemin 用户的 session bus（dbus EXTERNAL auth 拒绝），
+  托盘验收需以 zemin 身份运行；`/proc` 未挂载，`ps eww` 也拿不到环境变量，只能用截图确认。
+
 
 
 

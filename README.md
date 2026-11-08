@@ -13,8 +13,8 @@
 | 路径 | 说明 |
 |---|---|
 | [`docs/RUST_REWRITE_PLAN.md`](docs/RUST_REWRITE_PLAN.md) | 完整方案：外部契约冻结、四阶段迁移、A/B/C 验收矩阵、风险登记、ADR、实测记录 |
-| [`rust/`](rust/) | 零依赖 `networkmgr-core`：**76 个契约测试**，覆盖配置校验、`wpa_cli` 输出解析、`ifconfig` / `netstat` / `sysrc` 解析、`rc.conf` / `resolv.conf` 安全写入、WireGuard、托盘状态聚合、MO 翻译目录、命令执行层；含 `dump-state` 与 `apply-config` 两个诊断二进制 |
-| [`rust/spikes/`](rust/spikes/) | 四个 GUI 程序（9 个测试）：eframe/glow 最小窗口、tray-icon 原生菜单托盘、配置窗口（COSMIC 风格，明暗双主题 + IPv4/IPv6 校验预览）、托盘主程序（动态子菜单 + 30 秒刷新） |
+| [`rust/`](rust/) | 零依赖 `networkmgr-core`：**86 个契约测试**，覆盖配置校验、`wpa_cli` 输出解析、`ifconfig` / `netstat` / `sysrc` 解析、`rc.conf` / `resolv.conf` 安全写入、WireGuard、托盘状态聚合、MO 翻译目录、命令执行层；含 `dump-state` 与 `apply-config` 两个诊断二进制 |
+| [`rust/spikes/`](rust/spikes/) | 四个 GUI 程序（10 个测试）：eframe/glow 最小窗口、tray-icon 原生菜单托盘、配置窗口（COSMIC 风格，明暗双主题 + IPv4/IPv6 校验预览）、托盘主程序（动态子菜单、30 秒刷新、扫描连接与 Forget） |
 | [`.github/workflows/freebsd-rust.yml`](.github/workflows/freebsd-rust.yml) | 远端 FreeBSD 15.1 构建：core 测试 + 全部 GUI 程序，产出六个 FreeBSD 二进制 |
 | [`rust/spikes/deploy-to-vm.sh`](rust/spikes/deploy-to-vm.sh) | 把 CI 产物拷进 `freebsd15` VM 实跑验收 |
 | [`docs/execution-report-2026-11-07.md`](docs/execution-report-2026-11-07.md) | 分轮实施记录：做了什么、验证到什么程度、哪些没做 |
@@ -67,13 +67,13 @@ VM 绿灯不等于验收完成；阶段 3 结束必须同时有 B 与 C 的记�
 
 ## 已知限制
 
-- **阶段 0 / 1 已完成，阶段 2 主体完成，阶段 3 为骨架**：逻辑层全部移植并在 FreeBSD 上跑通 76 个测试，
-  配置窗口能校验、预览并（`--apply`）真写，托盘程序有动态菜单但扫描结果的完整连接流程、
-  300 ms 连接动画、`Forget` 的 remove_network 仍未实现。
+- **阶段 0 / 1 已完成，阶段 2 主体完成，阶段 3 主体完成**：逻辑层全部移植并在 FreeBSD 上跑通 86 个测试，
+  配置窗口能校验、预览并（`--apply`）真写；托盘支持扫描连接、密码框与 Forget，
+  仍有 300 ms 连接动画、企业级 EAP 凭据收集（引导至配置窗口）未实现。
 - **没有可安装的发行包**：`setup.py` / port 仍指向 Python 版，阶段 4（devd + 打包）未开始。
 - 未部署 NetworkMgr 的 FreeBSD 主机可能缺 `wpa_supplicant.conf` 的 `ctrl_interface`，
   导致 `wpa_cli` 全链路不可用（方案第 9 节 P1 风险）。
 - 真实 `wpa_cli` 正常输出样本仍缺，解析层由标准格式 mock 样本覆盖；
   VM 无无线网卡，Wi-Fi 全流程必须等 C 类实机。
 - `service netif restart` 在 VM 上实测会让 SSH 掉线且不自动恢复（需重启机器），
-  托盘里的 `Restart Networking` 后续要加确认或改成分接口重启。
+  托盘里的 `Restart Networking` 已改为二次确认 + 只重启当前网卡。

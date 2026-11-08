@@ -13,7 +13,7 @@
   .sub { color:var(--muted); font-size:13px; margin-bottom:8px; }
   .progress { display:flex; align-items:center; gap:10px; margin:12px 0 20px; }
   .bar { flex:1; height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; }
-  .fill { height:100%; background:#34a853; width:93.3%; transition:width .3s; }
+  .fill { height:100%; background:#34a853; width:94.1%; transition:width .3s; }
   .pct { font-size:13px; color:var(--muted); white-space:nowrap; }
   .board { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
   @media (max-width:760px) { .board { grid-template-columns:1fr; } }
@@ -36,10 +36,10 @@
 <body>
 <div class="wrap">
   <h1>NetworkMgr Rust 重写任务看板</h1>
-  <div class="sub">2026-11-07 · 共 15 个任务 · 已完成 14 个</div>
+  <div class="sub">2026-11-07 · 共 17 个任务 · 已完成 16 个</div>
   <div class="progress">
     <div class="bar"><div class="fill"></div></div>
-    <span class="pct">93%</span>
+    <span class="pct">94%</span>
   </div>
   <div class="board"><div class="col"><div class="col-head"><span class="dot" style="background:#9aa0a6"></span>待办<span class="count">1</span></div><div class="card">
 <div class="card-head"><span class="tag" style="background:#f472b6">分析</span><span class="status" style="color:#9aa0a6;border-color:#9aa0a6">待办</span></div>
@@ -48,7 +48,7 @@
 <div class="kv"><span class="k">完成标准</span><span class="v">真实 wpa_cli 样本 + 无线连接全流程走通</span></div>
 </div></div>
 <div class="col"><div class="col-head"><span class="dot" style="background:#e8a33d"></span>进行中<span class="count">0</span></div></div>
-<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">14</span></div><div class="card">
+<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">16</span></div><div class="card">
 <div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
 <div class="card-title">移植 config：rc.conf 安全写值、resolv.conf、PSK/WEP/Open/EAP 字段</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">rust/src/config.rs（592 行，13 个测试）</span></div>
@@ -131,6 +131,18 @@
 <div class="card-title">界面预览入 README，统一更新全部文档并推送</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">README 界面预览、AGENTS.md 仓库状态、方案第 27 节、报告第五轮</span></div>
 <div class="kv"><span class="k">完成标准</span><span class="v">文档数字与实际一致（core 76 / GUI 9 / 六个二进制）</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">Restart Networking 二次确认并改为分接口重启</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">GTK 确认框、netif_restart(Some(iface))、截图 docs/images/restart-confirm.png</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">确认后只重启当前网卡；Cancel 后接口状态与 SSH 不变</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">补完扫描连接、PSK/WEP 密码框与 Forget 子菜单</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">wpa.rs 连接字段、sys.rs 六个 wpa 原语、托盘接线；core 86 + GUI 10 测试</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">add/set/enable/select/remove 全套走通；连上才 save_config；失败删新建块</span></div>
 </div></div></div>
   <div class="footer">由 goal-driven-autonomous-agent 生成。详细结果见执行报告。</div>
 </div>

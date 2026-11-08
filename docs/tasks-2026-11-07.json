@@ -126,6 +126,24 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t16",
+    "title": "Restart Networking 二次确认并改为分接口重启",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "GTK 确认框；netif_restart(Some(iface))；截图 docs/images/restart-confirm.png",
+    "criteria": "确认后只重启当前网卡；Cancel 后接口状态与 SSH 不变",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t17",
+    "title": "补完扫描连接、PSK/WEP 密码框与 Forget 子菜单",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "wpa.rs connect_fields / sys.rs 六个 wpa 原语 / 托盘接线；core 86 + GUI 10 测试",
+    "criteria": "add/set/enable/select/remove 全套走通；连上才 save_config；失败删新建块",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",
