@@ -148,8 +148,9 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
 
     let state = &snapshot.state;
     let wireless = state.kind == Some("wifi");
-    let label =
-        |template: &'static str, card: &str| networkmgr_core::tr(template).replace("%s", card);
+    let label = |template: &'static str, card: &str| {
+        networkmgr_core::i18n::tr(template).replace("%s", card)
+    };
     let headline = match (&state.card, state.connection) {
         (None, _) => networkmgr_core::tr!("Network card is not enabled").to_string(),
         (Some(card), "Connected") => match &state.ssid {
