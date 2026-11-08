@@ -490,6 +490,33 @@ impl<'a, R: Runner> Sys<'a, R> {
         self.call(&["service".to_string(), name.to_string(), action.to_string()])
     }
 
+    /// `service <name> <action> <iface>`，例如 `service netif start em0`。
+    pub fn service_iface(&self, name: &str, action: &str, iface: &str) -> Result<(), SysError> {
+        self.call(&[
+            "service".to_string(),
+            name.to_string(),
+            action.to_string(),
+            iface.to_string(),
+        ])
+    }
+
+    /// `/etc/pccard_ether <nic> start|startchildren`。
+    pub fn pccard_ether(&self, nic: &str, action: &str) -> bool {
+        self.run("/etc/pccard_ether", &[nic, action])
+            .is_some_and(|output| output.success)
+    }
+
+    /// `ifconfig -l ether`：所有以太网接口名。
+    pub fn ifconfig_list_ether(&self) -> String {
+        self.text("ifconfig", &["-l", "ether"])
+    }
+
+    /// `chown <owner:group> <path>`，用于把 `wpa_supplicant.conf` 交回 root:wheel。
+    pub fn chown(&self, path: &str, owner: &str) -> bool {
+        self.run("chown", &[owner, path])
+            .is_some_and(|output| output.success)
+    }
+
     /// `wg-quick up|down <device>`。
     pub fn wg_quick(&self, action: &str, device: &str) -> Result<(), SysError> {
         self.call(&crate::wg::wg_quick_args(action, device))
