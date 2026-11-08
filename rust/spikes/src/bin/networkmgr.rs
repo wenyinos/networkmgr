@@ -1184,39 +1184,38 @@ fn show_message(_title: &str, text: &str) {
     eprintln!("networkmgr: {text}");
 }
 
-/// 把 DBus/X 环境对齐到当前桌面会话。
+/// 把 DBus/X 环境对齐到当前桌面会话，让直接运行 `networkmgr-rust` 也能工作。
 ///
-/// root 通过 `sudo` 启动时，libayatana 必须连接桌面用户的 session bus；
-/// root 直接登录时则从 `xfce4-panel` 的环境里取，并降权到该用户运行。
+/// - 扫描 `/tmp/dbus-*`，选带 `org.kde.StatusNotifierWatcher` 的 bus；
+/// - 未设置 DISPLAY/XAUTHORITY 时用 `:0` 与 `/home/<user>/.Xauthority`；
+/// - root 通过 sudo 或直接登录时，降权到桌面用户再运行。
 fn prepare_session_environment() {
-    let Some(pid) = find_panel() else {
-        return;
-    };
-    let env = process_env(&pid);
-    let bus = env_value(&env, "DBUS_SESSION_BUS_ADDRESS");
-    let display = env_value(&env, "DISPLAY").unwrap_or_else(|| ":0".to_string());
-    let xauthority = env_value(&env, "XAUTHORITY");
+    let bus = find_status_notifier_bus();
     if let Some(bus) = &bus {
         std::env::set_var("DBUS_SESSION_BUS_ADDRESS", bus);
     }
     if std::env::var_os("DISPLAY").is_none() {
-        std::env::set_var("DISPLAY", &display);
+        std::env::set_var("DISPLAY", ":0");
     }
+    let user = std::env::var("SUDO_USER")
+        .ok()
+        .or_else(|| find_panel().and_then(|pid| process_owner(&pid)))
+        .or_else(|| std::env::var("USER").ok())
+        .filter(|user| user != "root");
+    let Some(user) = user else {
+        return;
+    };
     if std::env::var_os("XAUTHORITY").is_none() {
-        if let Some(xauthority) = &xauthority {
-            std::env::set_var("XAUTHORITY", xauthority);
+        let path = format!("/home/{user}/.Xauthority");
+        if std::path::Path::new(&path).exists() {
+            std::env::set_var("XAUTHORITY", path);
         }
     }
     if !is_root() {
         return;
     }
-    let user = std::env::var("SUDO_USER")
-        .ok()
-        .or_else(|| process_owner(&pid))
-        .filter(|user| user != "root");
-    let Some(user) = user else {
-        return;
-    };
+    let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_string());
+    let xauthority = std::env::var("XAUTHORITY").ok();
     relaunch_as(&user, &display, xauthority.as_deref(), bus.as_deref());
     std::process::exit(0);
 }
@@ -1232,19 +1231,37 @@ fn find_panel() -> Option<String> {
         .map(str::to_string)
 }
 
-fn process_env(pid: &str) -> String {
-    std::process::Command::new("procstat")
-        .args(["-e", pid])
-        .output()
-        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
-        .unwrap_or_default()
+/// 找一条能注册 StatusNotifierItem 的 session bus。
+fn find_status_notifier_bus() -> Option<String> {
+    let mut candidates: Vec<String> = std::fs::read_dir("/tmp")
+        .ok()?
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            name.starts_with("dbus-")
+                .then(|| format!("unix:path=/tmp/{name}"))
+        })
+        .collect();
+    candidates.sort();
+    candidates
+        .into_iter()
+        .find(|address| status_notifier_reachable(address))
 }
 
-fn env_value(text: &str, key: &str) -> Option<String> {
-    let prefix = format!("{key}=");
-    text.split_whitespace()
-        .find(|part| part.starts_with(&prefix))
-        .map(|part| part[prefix.len()..].to_string())
+fn status_notifier_reachable(address: &str) -> bool {
+    std::process::Command::new("dbus-send")
+        .env("DBUS_SESSION_BUS_ADDRESS", address)
+        .args([
+            "--session",
+            "--dest=org.kde.StatusNotifierWatcher",
+            "--type=method_call",
+            "--print-reply",
+            "/StatusNotifierWatcher",
+            "org.freedesktop.DBus.Peer.Ping",
+        ])
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
 
 fn process_owner(pid: &str) -> Option<String> {
