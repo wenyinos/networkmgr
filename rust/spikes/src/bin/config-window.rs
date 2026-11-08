@@ -237,6 +237,7 @@ struct ConfigWindow {
     eap_private_key: String,
     eap_key_password: String,
     wifi_status: String,
+    wpa_ready: Option<bool>,
     vpn_status: String,
     runner: RealRunner,
 }
@@ -292,6 +293,7 @@ impl Default for ConfigWindow {
             eap_private_key: String::new(),
             eap_key_password: String::new(),
             wifi_status: String::new(),
+            wpa_ready: None,
             vpn_status: String::new(),
             runner: RealRunner::new(),
         }
@@ -723,7 +725,41 @@ impl ConfigWindow {
     }
 
     /// Wi-Fi 凭据：PSK / EAP / 开放网络。默认 dry-run，`--apply` 才写 daemon。
+    /// 给 `/etc/wpa_supplicant.conf` 补 `ctrl_interface`，不自动重启服务。
+    fn fix_wpa_ctrl(&mut self) {
+        match networkmgr_core::config::fix_ctrl_interface_file("/etc/wpa_supplicant.conf") {
+            Ok(message) => {
+                self.wpa_ready = Some(true);
+                self.wifi_status = message;
+            }
+            Err(error) => self.wifi_status = format!("FAILED: {error}"),
+        }
+    }
+
     fn wifi_card(&mut self, ui: &mut egui::Ui, theme: &Theme) {
+        if self.wpa_ready.is_none() {
+            let nic = self.current_nic().unwrap_or_default();
+            let sys = Sys::new(&self.runner);
+            self.wpa_ready = Some(!sys.wpa_status(&nic).is_empty());
+        }
+        if self.wpa_ready == Some(false) {
+            card(theme).show(ui, |ui| {
+                ui.label(
+                    RichText::new(networkmgr_core::tr!(
+                        "wpa_cli is unavailable; the control interface is missing."
+                    ))
+                    .size(12.0)
+                    .color(theme.destructive),
+                );
+                ui.add_space(6.0);
+                if secondary_button(ui, theme, networkmgr_core::tr!("Fix control interface"))
+                    .clicked()
+                {
+                    self.fix_wpa_ctrl();
+                }
+            });
+            ui.add_space(12.0);
+        }
         section(ui, theme, networkmgr_core::tr!("Wi-Fi Network"));
         ui.add_space(6.0);
         field(ui, theme, "SSID", &mut self.wifi_ssid);

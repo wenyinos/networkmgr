@@ -73,6 +73,7 @@ enum Action {
     Scan(String),
     Configure(String),
     Disconnect(String),
+    FixWpaCtrl,
     Disable(String),
     Enable(String),
     Connect {
@@ -144,6 +145,8 @@ struct Snapshot {
     saved: Vec<SavedNetwork>,
     scans: Vec<ScanResult>,
     tunnels: WgDictionary,
+    /// 无线已启用但 `wpa_cli` 连不上 daemon（通常是缺 ctrl_interface）。
+    wpa_unavailable: bool,
 }
 
 fn gather() -> Snapshot {
@@ -153,8 +156,10 @@ fn gather() -> Snapshot {
 
     let mut saved = Vec::new();
     let mut scans = Vec::new();
+    let mut wpa_unavailable = false;
     if state.kind == Some("wifi") {
         if let Some(card) = state.card.clone() {
+            wpa_unavailable = sys.wpa_status(&card).is_empty();
             saved = wpa::wpa_networks(&sys.wpa_list_networks(&card));
             let results = sys.wpa_scan_results(&card);
             let noise =
@@ -177,6 +182,7 @@ fn gather() -> Snapshot {
         saved,
         scans,
         tunnels,
+        wpa_unavailable,
     }
 }
 
@@ -221,6 +227,15 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
     };
     title!(menu, &headline);
     let _ = menu.append(&PredefinedMenuItem::separator());
+
+    if snapshot.wpa_unavailable {
+        add!(
+            menu,
+            networkmgr_core::tr!("Fix wpa_cli control interface"),
+            Action::FixWpaCtrl
+        );
+        let _ = menu.append(&PredefinedMenuItem::separator());
+    }
 
     if !snapshot.tunnels.configs.is_empty() {
         title!(menu, networkmgr_core::tr!("WireGuard VPN"));
@@ -435,6 +450,19 @@ fn dispatch(action: Action, tx: &mpsc::Sender<UiRequest>) {
                 );
             }
         },
+        Action::FixWpaCtrl => {
+            if !confirm_fix_wpa_ctrl() {
+                return;
+            }
+            let tx = tx.clone();
+            thread::spawn(move || {
+                match networkmgr_core::config::fix_ctrl_interface_file("/etc/wpa_supplicant.conf") {
+                    Ok(message) => println!("networkmgr: {message}"),
+                    Err(error) => eprintln!("networkmgr: {error}"),
+                }
+                let _ = tx.send(UiRequest::Refresh);
+            });
+        }
         Action::Disconnect(nic) => {
             let tx = tx.clone();
             thread::spawn(move || {
@@ -802,6 +830,34 @@ fn confirm_restart(card: Option<&str>) -> bool {
 #[cfg(not(feature = "appindicator"))]
 fn confirm_restart(_card: Option<&str>) -> bool {
     eprintln!("networkmgr: restart needs the appindicator (GTK) backend");
+    false
+}
+
+#[cfg(feature = "appindicator")]
+fn confirm_fix_wpa_ctrl() -> bool {
+    use gtk::prelude::*;
+    let dialog = gtk::MessageDialog::new(
+        None::<&gtk::Window>,
+        gtk::DialogFlags::MODAL,
+        gtk::MessageType::Question,
+        gtk::ButtonsType::None,
+        networkmgr_core::tr!(concat!(
+            "Add ctrl_interface to /etc/wpa_supplicant.conf? ",
+            "A backup is kept; restart wpa_supplicant afterwards."
+        )),
+    );
+    dialog.set_title(networkmgr_core::tr!("Fix wpa_cli control interface"));
+    dialog.add_button(networkmgr_core::tr!("Cancel"), gtk::ResponseType::Cancel);
+    dialog.add_button(networkmgr_core::tr!("Fix"), gtk::ResponseType::Ok);
+    dialog.set_default_response(gtk::ResponseType::Cancel);
+    let response = dialog.run();
+    dialog.close();
+    response == gtk::ResponseType::Ok
+}
+
+#[cfg(not(feature = "appindicator"))]
+fn confirm_fix_wpa_ctrl() -> bool {
+    eprintln!("networkmgr: fixing ctrl_interface needs the appindicator (GTK) backend");
     false
 }
 
@@ -1253,6 +1309,7 @@ mod tests {
                 enterprise: false,
             }],
             tunnels: wg::build_dictionary("YES", &[]),
+            wpa_unavailable: false,
         }
     }
 

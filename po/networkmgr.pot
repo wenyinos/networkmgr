@@ -372,3 +372,24 @@ msgstr ""
 msgid "No WireGuard tunnels found."
 msgstr ""
 
+msgid "wpa_cli is unavailable; the control interface is missing."
+msgstr ""
+
+msgid "Fix control interface"
+msgstr ""
+
+msgid "Control interface already present"
+msgstr ""
+
+msgid "Fixed; restart wpa_supplicant to apply"
+msgstr ""
+
+msgid "Fix wpa_cli control interface"
+msgstr ""
+
+msgid "Add ctrl_interface to /etc/wpa_supplicant.conf? A backup is kept; restart wpa_supplicant afterwards."
+msgstr ""
+
+msgid "Fix"
+msgstr ""
+

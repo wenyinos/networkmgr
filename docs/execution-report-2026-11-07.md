@@ -389,3 +389,22 @@
   扫描结果信号百分比正确。
 - 截图：`docs/images/tray-menu-wifi-mock.png`、`docs/images/tray-menu-scan-mock.png`。
 - 真实关联/握手/EAP/save_config 仍未验证；模拟仅覆盖 UI 与状态聚合。
+
+---
+
+## 第十五轮（22:55–23:10）：wpa_cli 控制接口缺失的修复
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 53 | core 补全函数与文件修复 | 构建 | `has/ensure_ctrl_interface` + `fix_ctrl_interface_file` | ✅ 完成 |
+| 54 | `apply-config --fix-wpa-ctrl` | 构建 | 备份、写入、0600、幂等 | ✅ 完成 |
+| 55 | 配置窗口与托盘检测提示 | 构建 | 红色提示 + 修复按钮/菜单项 | ✅ 完成 |
+| 56 | 7 条文案 × 7 语言 | 写作 | po 更新 | ✅ 完成 |
+
+### 关键结果
+
+- 精确匹配 `ctrl_interface`（忽略注释，`ctrl_interface_group` 不算），幂等修复。
+- 修复前备份 `.bak-networkmgr`，写后 0600；不自动重启服务，避免静默断网。
+- 本机以 root 实测：第一次写入并备份，第二次返回“已存在”。
+- 配置窗口无线页在 `wpa_cli` 不可用时显示中文红色提示与「修复控制接口」。
+- core **104**、GUI **12** 测试通过。

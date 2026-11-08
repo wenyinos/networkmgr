@@ -382,3 +382,24 @@ msgstr "Интерфейсы не найдены."
 msgid "No WireGuard tunnels found."
 msgstr "Туннели WireGuard не найдены."
 
+msgid "wpa_cli is unavailable; the control interface is missing."
+msgstr "wpa_cli недоступен: отсутствует интерфейс управления."
+
+msgid "Fix control interface"
+msgstr "Исправить интерфейс управления"
+
+msgid "Control interface already present"
+msgstr "Интерфейс управления уже присутствует."
+
+msgid "Fixed; restart wpa_supplicant to apply"
+msgstr "Исправлено; перезапустите wpa_supplicant."
+
+msgid "Fix wpa_cli control interface"
+msgstr "Исправить интерфейс управления wpa_cli"
+
+msgid "Add ctrl_interface to /etc/wpa_supplicant.conf? A backup is kept; restart wpa_supplicant afterwards."
+msgstr "Добавить ctrl_interface в /etc/wpa_supplicant.conf? Резервная копия сохраняется; затем перезапустите wpa_supplicant."
+
+msgid "Fix"
+msgstr "Исправить"
+

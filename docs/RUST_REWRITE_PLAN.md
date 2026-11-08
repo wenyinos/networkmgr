@@ -1026,6 +1026,22 @@ USB 无线网卡测试结论：MT7601U 能扫描但关联超时；AR9271 在 Fre
   EAP 表单已覆盖。
 - 清理：托盘/daemon 停止、`wlan0` 销毁、假工具删除、`xdotool` 卸载，接口恢复 `vtnet0 lo0`。
 
+## 37. wpa_cli 控制接口缺失的修复（2026-11-08 23:05）
+
+P1 风险（第 9 节）：老机器的 `/etc/wpa_supplicant.conf` 只有 `network={...}`，
+没有 `ctrl_interface`，`wpa_cli` 连不上 daemon，无线全链路静默失效。
+
+- `config.rs` 新增 `has_ctrl_interface` / `ensure_ctrl_interface`：精确匹配 key
+  （忽略注释，`ctrl_interface_group` 不算），缺则返回补好头部的内容。
+- `config::fix_ctrl_interface_file(path)`：备份 `.bak-networkmgr`、写回、chmod 0600，
+  幂等（已有则不改）；**不自动重启服务**，避免静默断网。
+- `apply-config --fix-wpa-ctrl`：命令行入口，打印备份路径与重启提示；实测两次调用
+  分别为「已修复」与「已存在」。
+- 配置窗口无线页检测 `wpa_cli` 是否可用，不可用时显示红色提示与「修复控制接口」按钮。
+- 托盘在无线状态下检测 `wpa_status` 为空，菜单显示「修复 wpa_cli 控制接口」，
+  确认后执行同一修复函数并刷新菜单。
+- 新文案 7 条进全部 7 个 po；core **104**、GUI **12** 测试通过。
+
 
 
 

@@ -212,6 +212,56 @@ pub fn wep_key_value(key: &str) -> String {
 /// 一条 `set_network` 的字段：名字是固定字面量，值已按 daemon 要求加引号。
 pub type NetworkField = (&'static str, String);
 
+/// wpa_supplicant 全局控制接口，与安装模板使用同一路径。
+pub const WPA_CTRL_LINE: &str = "ctrl_interface=/var/run/wpa_supplicant";
+
+/// 内容里是否已有有效的 `ctrl_interface`（忽略注释行）。
+///
+/// `ctrl_interface_group` 是另一个 key，不提供控制 socket，所以必须精确匹配。
+pub fn has_ctrl_interface(text: &str) -> bool {
+    text.lines().any(|line| {
+        let trimmed = line.trim();
+        !trimmed.starts_with('#')
+            && trimmed
+                .split_once('=')
+                .is_some_and(|(key, _)| key.trim() == "ctrl_interface")
+    })
+}
+
+/// 缺 `ctrl_interface` 时返回补好文件头的新内容；已有则返回 `None`。
+///
+/// 老机器上的 `/etc/wpa_supplicant.conf` 往往只有 `network={...}`，
+/// 没有这一行时 `wpa_cli` 连不上 daemon，整个无线功能都会静默失效。
+pub fn ensure_ctrl_interface(text: &str) -> Option<String> {
+    if has_ctrl_interface(text) {
+        None
+    } else {
+        Some(format!("{WPA_CTRL_LINE}\n{text}"))
+    }
+}
+
+/// 给指定文件补 `ctrl_interface`，已有则不改。
+///
+/// 写前备份到 `<path>.bak-networkmgr`，写后把权限压回 0600。返回给用户看的
+/// 说明；调用方负责提示「重启 wpa_supplicant 才会生效」。
+pub fn fix_ctrl_interface_file(path: &str) -> Result<String, String> {
+    let current = std::fs::read_to_string(path).map_err(|error| format!("read {path}: {error}"))?;
+    let Some(updated) = ensure_ctrl_interface(&current) else {
+        return Ok(format!("{path} already has ctrl_interface"));
+    };
+    let backup = format!("{path}.bak-networkmgr");
+    std::fs::copy(path, &backup).map_err(|error| format!("backup {backup}: {error}"))?;
+    std::fs::write(path, updated).map_err(|error| format!("write {path}: {error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(format!(
+        "fixed {path}; backup at {backup}; restart wpa_supplicant"
+    ))
+}
+
 /// PSK / WEP 网络的字段，顺序与 `save_psk_network` 完全一致。
 ///
 /// `WPA2-PSK` 与 `WPA3-SAE` 都写成 `RSN`：WPA2/WPA3 过渡 AP 会同时广播
@@ -328,6 +378,34 @@ pub fn eap_network_fields(ssid: &str, config: &EapConfig) -> Vec<NetworkField> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ctrl_interface_is_added_only_when_missing() {
+        let missing = "network={\n}\n";
+        let fixed = ensure_ctrl_interface(missing).expect("should add ctrl_interface");
+        assert_eq!(fixed, format!("{WPA_CTRL_LINE}\n{missing}"));
+        assert!(ensure_ctrl_interface(&fixed).is_none());
+        let commented = "# ctrl_interface=/old\nnetwork={\n}\n";
+        assert!(ensure_ctrl_interface(commented).is_some());
+        let group = "ctrl_interface_group=operator\nnetwork={\n}\n";
+        assert!(ensure_ctrl_interface(group).is_some());
+    }
+
+    #[test]
+    fn fix_ctrl_interface_file_backs_up_and_is_idempotent() {
+        let dir = std::env::temp_dir().join(format!("nm-ctrl-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("wpa_supplicant.conf");
+        std::fs::write(&path, "network={\n}\n").unwrap();
+        let message = fix_ctrl_interface_file(path.to_str().unwrap()).unwrap();
+        assert!(message.contains("fixed"));
+        let updated = std::fs::read_to_string(&path).unwrap();
+        assert!(updated.starts_with(WPA_CTRL_LINE));
+        assert!(dir.join("wpa_supplicant.conf.bak-networkmgr").exists());
+        let again = fix_ctrl_interface_file(path.to_str().unwrap()).unwrap();
+        assert!(again.contains("already has"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn rc_conf_names_follow_the_python_regex() {

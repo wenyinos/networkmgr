@@ -374,3 +374,24 @@ msgstr "没有找到可用接口。"
 msgid "No WireGuard tunnels found."
 msgstr "没有找到 WireGuard 隧道。"
 
+msgid "wpa_cli is unavailable; the control interface is missing."
+msgstr "wpa_cli 不可用：缺少控制接口。"
+
+msgid "Fix control interface"
+msgstr "修复控制接口"
+
+msgid "Control interface already present"
+msgstr "控制接口已存在。"
+
+msgid "Fixed; restart wpa_supplicant to apply"
+msgstr "已修复；请重启 wpa_supplicant 生效。"
+
+msgid "Fix wpa_cli control interface"
+msgstr "修复 wpa_cli 控制接口"
+
+msgid "Add ctrl_interface to /etc/wpa_supplicant.conf? A backup is kept; restart wpa_supplicant afterwards."
+msgstr "在 /etc/wpa_supplicant.conf 中加入 ctrl_interface？会保留备份，之后需要重启 wpa_supplicant。"
+
+msgid "Fix"
+msgstr "修复"
+

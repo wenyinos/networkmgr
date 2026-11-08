@@ -103,8 +103,9 @@ VM 绿灯不等于验收完成；阶段 3 结束必须同时有 B 与 C 的记�
   未提供翻译的语言或条目按 gettext 规则回退英文，`de_DE` 这类区域名会回退到 `de`。
 - **没有可安装的发行包**：旧 Python 实现与 `setup.py` 已删除，但 FreeBSD port 尚未迁移到
   Rust，阶段 4（打包）仍未完成。
-- 未部署 NetworkMgr 的 FreeBSD 主机可能缺 `wpa_supplicant.conf` 的 `ctrl_interface`，
-  导致 `wpa_cli` 全链路不可用（方案第 9 节 P1 风险）。
+- 老机器的 `wpa_supplicant.conf` 可能缺 `ctrl_interface`，导致 `wpa_cli` 全链路不可用。
+  配置窗口与托盘会检测并显示「修复控制接口」，等价于
+  `apply-config --fix-wpa-ctrl`：备份后写入、chmod 0600，需手动重启 `wpa_supplicant` 生效。
 - 真实 `wpa_cli` 正常输出样本仍缺，解析层由标准格式 mock 样本覆盖；
   VM 无无线网卡，Wi-Fi 全流程必须等 C 类实机。
 - `service netif restart` 在 VM 上实测会让 SSH 掉线且不自动恢复（需重启机器），

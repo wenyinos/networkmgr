@@ -7,6 +7,10 @@
 //!   apply-config <nic> --dhcp [--apply]
 //!   apply-config <nic> --static <ip> <netmask> \
 //!       [--gateway <gw>] [--dns <dns1,dns2>] [--search <domain>] [--apply]
+//!   apply-config --fix-wpa-ctrl
+//!
+//! `--fix-wpa-ctrl` 给 `/etc/wpa_supplicant.conf` 补上 `ctrl_interface`，
+//! 修复老机器上 `wpa_cli` 全链路不可用的问题；它不重启服务，避免静默断网。
 //!
 //! 验证时请挑一个不影响 SSH 的接口（例如 `ifconfig epair0 create` 出来的
 //! `epair0a`），不要拿承载 SSH 的那块网卡试。
@@ -78,8 +82,29 @@ fn parse(args: &[String]) -> Result<Options, String> {
     })
 }
 
+/// 给 `/etc/wpa_supplicant.conf` 补 `ctrl_interface`；不重启服务。
+///
+/// 重启 wpa_supplicant 会短暂断网，所以只打印提示，交给用户决定时机。
+fn fix_wpa_ctrl() -> ExitCode {
+    match config::fix_ctrl_interface_file("/etc/wpa_supplicant.conf") {
+        Ok(message) => {
+            println!("{message}");
+            println!("请手动重启 wpa_supplicant 使其生效（会短暂断网）：");
+            println!("  service wpa_supplicant restart");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("apply-config: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|arg| arg == "--fix-wpa-ctrl") {
+        return fix_wpa_ctrl();
+    }
     let options = match parse(&args) {
         Ok(options) => options,
         Err(error) => {

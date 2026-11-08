@@ -288,6 +288,15 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t34",
+    "title": "修复 wpa_supplicant.conf 缺 ctrl_interface 的 P1 风险",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "ensure_ctrl_interface + fix_ctrl_interface_file；apply-config --fix-wpa-ctrl；UI 提示",
+    "criteria": "备份/0600/幂等；配置窗口与托盘可见修复入口；不自动重启服务",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",

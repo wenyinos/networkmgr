@@ -382,3 +382,24 @@ msgstr "Fant ingen grensesnitt."
 msgid "No WireGuard tunnels found."
 msgstr "Fant ingen WireGuard-tunneler."
 
+msgid "wpa_cli is unavailable; the control interface is missing."
+msgstr "wpa_cli er utilgjengelig; kontrollgrensesnittet mangler."
+
+msgid "Fix control interface"
+msgstr "Reparer kontrollgrensesnittet"
+
+msgid "Control interface already present"
+msgstr "Kontrollgrensesnittet finnes allerede."
+
+msgid "Fixed; restart wpa_supplicant to apply"
+msgstr "Reparert; start wpa_supplicant på nytt for å bruke det."
+
+msgid "Fix wpa_cli control interface"
+msgstr "Reparer wpa_cli-kontrollgrensesnittet"
+
+msgid "Add ctrl_interface to /etc/wpa_supplicant.conf? A backup is kept; restart wpa_supplicant afterwards."
+msgstr "Legge til ctrl_interface i /etc/wpa_supplicant.conf? En sikkerhetskopi beholdes; start wpa_supplicant på nytt etterpå."
+
+msgid "Fix"
+msgstr "Reparer"
+

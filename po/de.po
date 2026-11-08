@@ -382,3 +382,24 @@ msgstr "Keine Schnittstellen gefunden."
 msgid "No WireGuard tunnels found."
 msgstr "Keine WireGuard-Tunnel gefunden."
 
+msgid "wpa_cli is unavailable; the control interface is missing."
+msgstr "wpa_cli ist nicht verfügbar; die Steuerungsschnittstelle fehlt."
+
+msgid "Fix control interface"
+msgstr "Steuerungsschnittstelle reparieren"
+
+msgid "Control interface already present"
+msgstr "Steuerungsschnittstelle ist bereits vorhanden."
+
+msgid "Fixed; restart wpa_supplicant to apply"
+msgstr "Repariert; wpa_supplicant neu starten, um es anzuwenden."
+
+msgid "Fix wpa_cli control interface"
+msgstr "wpa_cli-Steuerungsschnittstelle reparieren"
+
+msgid "Add ctrl_interface to /etc/wpa_supplicant.conf? A backup is kept; restart wpa_supplicant afterwards."
+msgstr "ctrl_interface zu /etc/wpa_supplicant.conf hinzufügen? Eine Sicherung wird behalten; wpa_supplicant danach neu starten."
+
+msgid "Fix"
+msgstr "Reparieren"
+
