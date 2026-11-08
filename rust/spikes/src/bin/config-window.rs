@@ -699,17 +699,33 @@ fn window_icon() -> egui::IconData {
     }
 }
 
+/// 读取 `--interface <nic>`，用于从托盘打开时预选网卡。
+fn parse_interface_arg(args: &[String]) -> Option<String> {
+    args.windows(2)
+        .find(|pair| pair[0] == "--interface")
+        .map(|pair| pair[1].clone())
+}
+
 fn main() -> eframe::Result<()> {
     networkmgr_core::i18n::init();
+    let args: Vec<String> = std::env::args().collect();
+    let requested = parse_interface_arg(&args);
     let limit = std::env::var("SPIKE_SECONDS")
         .ok()
         .and_then(|raw| raw.parse::<u64>().ok())
         .map(Duration::from_secs);
-    let apply_for_real = std::env::args().any(|arg| arg == "--apply");
+    let apply_for_real = args.iter().any(|arg| arg == "--apply");
     // 便于分别截图验收两套主题：NETWORKMGR_THEME=dark
     let dark = std::env::var("NETWORKMGR_THEME")
         .map(|value| value.eq_ignore_ascii_case("dark"))
         .unwrap_or(false);
+    // 真实机器上列出实际接口；`ifconfig` 不可用时保留示例列表。
+    let runner = RealRunner::new();
+    let discovered: Vec<String> = networkmgr_core::sys::Sys::new(&runner)
+        .ifconfig_list()
+        .split_whitespace()
+        .map(str::to_string)
+        .collect();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([900.0, 640.0])
@@ -722,12 +738,25 @@ fn main() -> eframe::Result<()> {
         "networkmgr-config-window",
         options,
         Box::new(move |_cc| {
-            Ok(Box::new(ConfigWindow {
+            let mut window = ConfigWindow {
                 limit,
                 apply_for_real,
                 dark,
                 ..Default::default()
-            }))
+            };
+            if !discovered.is_empty() {
+                window.interfaces = discovered;
+                window.selected = 0;
+            }
+            if let Some(nic) = requested {
+                if !window.interfaces.iter().any(|item| item == &nic) {
+                    window.interfaces.push(nic.clone());
+                }
+                if let Some(index) = window.interfaces.iter().position(|item| item == &nic) {
+                    window.selected = index;
+                }
+            }
+            Ok(Box::new(window))
         }),
     )
 }
@@ -738,6 +767,16 @@ mod tests {
 
     fn window() -> ConfigWindow {
         ConfigWindow::default()
+    }
+
+    #[test]
+    fn interface_argument_is_parsed() {
+        let args: Vec<String> = ["config-window", "--interface", "vtnet0"]
+            .iter()
+            .map(|item| item.to_string())
+            .collect();
+        assert_eq!(parse_interface_arg(&args), Some("vtnet0".to_string()));
+        assert_eq!(parse_interface_arg(&args[..1]), None);
     }
 
     #[test]

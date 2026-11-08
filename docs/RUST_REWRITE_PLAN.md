@@ -920,6 +920,17 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - 验证：本机实跑配置窗口，明暗两套标题栏左上角都显示新图标；
   README 的 `config-light.png` / `config-dark.png` 已换成带图标的版本。
 
+## 31. 托盘「配置网卡」接线（2026-11-08 19:45）
+
+- `Action::Configure` 不再只打印日志：依次尝试契约入口
+  `/usr/local/bin/networkmgr_configuration` 与开发时的 `config-window`，
+  以 `--interface <nic>` 启动并预选网卡；找不到二进制时只记录错误，不阻塞托盘。
+- 配置窗口新增 `--interface` 参数；启动时用 `ifconfig -l` 列出真实接口，
+  `ifconfig` 不可用时回退原有示例列表。
+- `Sys::ifconfig_list()` 封装 `ifconfig -l`；core 测试 100，GUI 测试 11。
+- 本机验证：`config-window --interface vtnet0` 的下拉框正确预选 `vtnet0`。
+- 托盘里点击 Configure 的真实交互依赖 appindicator 后端，留给 C 类实机。
+
 
 
 

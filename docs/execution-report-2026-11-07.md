@@ -275,3 +275,21 @@
 - 13 个 hicolor 尺寸全部生成（16–512），SVG 源文件入库。
 - 窗口图标用 64×64 未预乘 RGBA 内嵌，`eframe`/`egui` 直接读取，不引入图像解码依赖。
 - 本机实跑验证：明暗两套主题的标题栏左上角都显示新图标；README 截图已更新。
+
+---
+
+## 第九轮（19:35–19:45）：托盘「配置网卡」接线
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 32 | Configure 菜单启动配置窗口 | 构建 | 契约入口优先 + `--interface` 预选 | ✅ 完成 |
+| 33 | 配置窗口列出真实接口 | 构建 | `Sys::ifconfig_list()` + 回退示例 | ✅ 完成 |
+| 34 | 测试与文档 | 写作 | core 100 / GUI 11；方案第 31 节 | ✅ 完成 |
+
+### 关键结果
+
+- 托盘点击 Configure 时依次尝试 `/usr/local/bin/networkmgr_configuration` 与
+  `config-window`，用 `--interface <nic>` 打开并预选网卡。
+- 配置窗口启动时读取 `ifconfig -l`；读不到时保留示例接口，不影响本机开发。
+- 本机验证 `config-window --interface vtnet0` 下拉框正确预选。
+- 真实菜单点击依赖 appindicator 后端，留待 C 类实机。

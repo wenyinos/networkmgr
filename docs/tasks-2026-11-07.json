@@ -189,6 +189,15 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t23",
+    "title": "托盘 Configure 菜单启动配置窗口并预选网卡",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "契约入口优先 + --interface；ifconfig -l 真实接口列表",
+    "criteria": "config-window --interface vtnet0 正确预选；core 100 / GUI 11",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",

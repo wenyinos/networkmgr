@@ -344,6 +344,32 @@ fn dispatch(action: Action) {
     }
 }
 
+/// 配置窗口的候选路径：安装后的契约名优先，开发时回退 cargo 产物名。
+const CONFIG_WINDOW_CANDIDATES: &[&str] =
+    &["/usr/local/bin/networkmgr_configuration", "config-window"];
+
+/// 启动配置窗口并预选网卡；找不到二进制时只记录错误，不阻塞托盘。
+fn open_configuration(nic: &str) {
+    for program in CONFIG_WINDOW_CANDIDATES {
+        match std::process::Command::new(program)
+            .arg("--interface")
+            .arg(nic)
+            .spawn()
+        {
+            Ok(_) => {
+                println!("networkmgr: opened configuration for {nic}");
+                return;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                eprintln!("networkmgr: failed to open {program}: {error}");
+                return;
+            }
+        }
+    }
+    eprintln!("networkmgr: configuration window not found");
+}
+
 fn execute(action: Action) {
     let runner = RealRunner::new();
     let sys = Sys::new(&runner);
@@ -363,7 +389,7 @@ fn execute(action: Action) {
             println!("networkmgr: {nic} up");
         }
         Action::Configure(nic) => {
-            println!("networkmgr: configure {nic} -> 阶段 2 的配置窗口，尚未接线");
+            open_configuration(&nic);
         }
         Action::WgUp(device) => {
             let _ = sys.wg_quick("up", &device);
@@ -733,5 +759,13 @@ mod tests {
             );
         }
         assert_eq!(connect_plan("WPA2-EAP", None), ConnectPlan::Unsupported);
+    }
+
+    #[test]
+    fn configuration_candidates_start_with_the_contract_path() {
+        assert_eq!(
+            CONFIG_WINDOW_CANDIDATES[0],
+            "/usr/local/bin/networkmgr_configuration"
+        );
     }
 }

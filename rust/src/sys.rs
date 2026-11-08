@@ -511,6 +511,11 @@ impl<'a, R: Runner> Sys<'a, R> {
         self.text("ifconfig", &["-l", "ether"])
     }
 
+    /// `ifconfig -l`：所有接口名，空格分隔。
+    pub fn ifconfig_list(&self) -> String {
+        self.text("ifconfig", &["-l"])
+    }
+
     /// `chown <owner:group> <path>`，用于把 `wpa_supplicant.conf` 交回 root:wheel。
     pub fn chown(&self, path: &str, owner: &str) -> bool {
         self.run("chown", &[owner, path])
@@ -819,6 +824,12 @@ mod tests {
         let all = FakeRunner::new();
         Sys::new(&all).netif_restart(None).unwrap();
         assert_eq!(all.calls(), vec!["service netif restart"]);
+    }
+
+    #[test]
+    fn ifconfig_list_returns_all_interfaces() {
+        let fake = FakeRunner::new().expect("ifconfig -l", true, "em0 lo0 wlan0\n");
+        assert_eq!(Sys::new(&fake).ifconfig_list(), "em0 lo0 wlan0\n");
     }
 
     #[test]
