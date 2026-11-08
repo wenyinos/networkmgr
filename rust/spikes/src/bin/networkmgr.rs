@@ -611,7 +611,7 @@ fn ask_eap_credentials(ssid: &str) -> Option<config::EapConfig> {
     add_label(networkmgr_core::tr!("EAP Method:"), row);
     let method = gtk::ComboBoxText::new();
     for item in ["PEAP", "TTLS", "TLS"] {
-        method.append_text(Some(item));
+        method.append_text(item);
     }
     method.set_active(Some(0));
     grid.attach(&method, 1, row, 1, 1);
@@ -633,7 +633,7 @@ fn ask_eap_credentials(ssid: &str) -> Option<config::EapConfig> {
     add_label(networkmgr_core::tr!("Inner Auth:"), row);
     let phase2 = gtk::ComboBoxText::new();
     for item in ["MSCHAPV2", "MSCHAP", "PAP", "CHAP", "GTC", "TLS"] {
-        phase2.append_text(Some(item));
+        phase2.append_text(item);
     }
     phase2.set_active(Some(0));
     grid.attach(&phase2, 1, row, 1, 1);
@@ -724,7 +724,7 @@ fn ask_eap_credentials(ssid: &str) -> Option<config::EapConfig> {
         };
     if !valid {
         show_message(
-            networkmgr_core::tr!("%s Enterprise Authentication Failed").replace("%s", ssid),
+            &networkmgr_core::tr!("%s Enterprise Authentication Failed").replace("%s", ssid),
             networkmgr_core::tr!(
                 "Enter the username and either the password or the TLS certificate paths."
             ),
