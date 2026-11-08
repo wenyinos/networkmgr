@@ -13,7 +13,7 @@
   .sub { color:var(--muted); font-size:13px; margin-bottom:8px; }
   .progress { display:flex; align-items:center; gap:10px; margin:12px 0 20px; }
   .bar { flex:1; height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; }
-  .fill { height:100%; background:#34a853; width:96.9%; transition:width .3s; }
+  .fill { height:100%; background:#34a853; width:97%; transition:width .3s; }
   .pct { font-size:13px; color:var(--muted); white-space:nowrap; }
   .board { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
   @media (max-width:760px) { .board { grid-template-columns:1fr; } }
@@ -36,7 +36,7 @@
 <body>
 <div class="wrap">
   <h1>NetworkMgr Rust 重写任务看板</h1>
-  <div class="sub">2026-11-07 · 共 32 个任务 · 已完成 31 个</div>
+  <div class="sub">2026-11-07 · 共 33 个任务 · 已完成 32 个</div>
   <div class="progress">
     <div class="bar"><div class="fill"></div></div>
     <span class="pct">95%</span>
@@ -48,7 +48,7 @@
 <div class="kv"><span class="k">完成标准</span><span class="v">真实 wpa_cli 样本 + 无线连接全流程走通</span></div>
 </div></div>
 <div class="col"><div class="col-head"><span class="dot" style="background:#e8a33d"></span>进行中<span class="count">0</span></div></div>
-<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">31</span></div><div class="card">
+<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">32</span></div><div class="card">
 <div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
 <div class="card-title">移植 config：rc.conf 安全写值、resolv.conf、PSK/WEP/Open/EAP 字段</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">rust/src/config.rs（592 行，13 个测试）</span></div>
@@ -221,6 +221,12 @@
 <div class="card-title">配置窗口改为三页签并收紧布局</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">以太网 / Wi-Fi / VPN 三页；主题按钮左下角；3 张中文截图</span></div>
 <div class="kv"><span class="k">完成标准</span><span class="v">删除占位页；NETWORKMGR_PAGE 可直开指定页</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#f472b6">分析</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">VM 模拟无线 UI（假 wpa_cli/netstat + epair 改名 wlan0）</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">无线状态 JSON、主菜单与可用连接子菜单截图；环境已清理</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">当前 SSID 跳过；扫描结果与信号百分比正确；不触碰真实网络</span></div>
 </div></div></div>
   <div class="footer">由 goal-driven-autonomous-agent 生成。详细结果见执行报告。</div>
 </div>

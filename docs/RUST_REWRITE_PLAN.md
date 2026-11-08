@@ -1007,6 +1007,25 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - 主线程统一处理 `UiRequest::{Action, ConnectOutcome, Refresh}`，工作线程只发事件。
 - 测试：core **102**、GUI **12**；新增 2 条文案（Wi-Fi Network / Saved）进全部 7 个 po。
 
+## 36. VM 模拟无线 UI 验证（2026-11-08 22:50）
+
+USB 无线网卡测试结论：MT7601U 能扫描但关联超时；AR9271 在 FreeBSD 15 已无 `athn` 驱动。
+改用纯软件模拟验证托盘无线分支：
+
+- `epair99a` 改名为 `wlan0`，配置 `10.99.0.2/24`，用 `wpa_supplicant -D wired` 提供
+  `ctrl_interface`。
+- `PATH` 前缀放假的 `wpa_cli` / `netstat`：`status` 返回 `COMPLETED` + SSID，
+  `scan_results` 返回三条模拟 AP，`list_networks` 返回已保存网络；`netstat` 的默认路由指向 `wlan0`。
+- 结果：托盘状态 JSON 为
+  `{"card":"wlan0","kind":"wifi","connection":"Connected","ssid":"Phicomm_FIR150M","signal":120,...}`；
+  菜单完整显示标题、禁用/配置、`断开与 %s 的连接`、Saved Networks、忘记网络、可用连接、
+  重启网络、退出；可用连接子菜单正确跳过当前 SSID，列出 `Guest-Open (64%)` 与 `Corp-EAP (24%)`。
+- 截图：`docs/images/tray-menu-wifi-mock.png`、`docs/images/tray-menu-scan-mock.png`。
+- **边界**：这是 UI/状态层模拟，真实扫描、4-way handshake、EAP 认证与 `save_config` 落盘
+  仍未在硬件上验证；EAP 对话框点击因 GTK 子菜单收起未能自动触发，但 CI 编译与配置窗口的
+  EAP 表单已覆盖。
+- 清理：托盘/daemon 停止、`wlan0` 销毁、假工具删除、`xdotool` 卸载，接口恢复 `vtnet0 lo0`。
+
 
 
 

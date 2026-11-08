@@ -279,6 +279,15 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t33",
+    "title": "VM 模拟无线 UI（假 wpa_cli/netstat + epair 改名 wlan0）",
+    "type": "分析",
+    "status": "done",
+    "deliverable": "无线状态 JSON、主菜单与可用连接子菜单截图；环境已清理",
+    "criteria": "当前 SSID 跳过；扫描结果与信号百分比正确；不触碰真实网络",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",

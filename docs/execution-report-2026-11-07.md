@@ -370,3 +370,22 @@
 - 明暗切换按剩余高度推到底部，与参考图一致。
 - `NETWORKMGR_PAGE=wire|wireless|vpn` 可直接打开指定页，截图与脚本验收更方便。
 - 测试仍为 core **102** / GUI **12**。
+
+---
+
+## 第十四轮（22:30–22:55）：VM 模拟无线 UI 验证
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 50 | USB 无线网卡实测（MT7601U / AR9271） | 分析 | 能扫描；关联超时 / 无驱动 | ✅ 完成（受限） |
+| 51 | `epair` 改名 `wlan0` + 假 `wpa_cli`/`netstat` 模拟 | 构建 | 托盘无线状态与菜单截图 | ✅ 完成 |
+| 52 | 清理模拟环境 | 清理 | 销毁 wlan0、停 daemon、卸载 xdotool | ✅ 完成 |
+
+### 关键结果
+
+- MT7601U：`mtw` 驱动 + 手动固件能扫描，关联阶段 10 秒超时后本地 deauth；
+  AR9271：FreeBSD 15 已移除 `athn`，没有可安装驱动。
+- 模拟：托盘输出无线状态 JSON，主菜单与「可用连接」子菜单完整，当前 SSID 被跳过，
+  扫描结果信号百分比正确。
+- 截图：`docs/images/tray-menu-wifi-mock.png`、`docs/images/tray-menu-scan-mock.png`。
+- 真实关联/握手/EAP/save_config 仍未验证；模拟仅覆盖 UI 与状态聚合。
