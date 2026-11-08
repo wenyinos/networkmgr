@@ -216,6 +216,15 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t26",
+    "title": "VM 模拟 wpa_supplicant 验证 EAP/PSK/OPEN 命令序列",
+    "type": "分析",
+    "status": "done",
+    "deliverable": "wired 驱动 + epair；EAP 8 字段与 enable/select 全部 OK；环境已清理",
+    "criteria": "真实 daemon 接受 Rust 生成的参数；不触碰物理机",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",

@@ -311,3 +311,21 @@
 - EAP 对话框支持 PEAP/TTLS/TLS；TLS 自动置灰口令与内层认证，并要求证书路径。
 - 写入路径复用 `config::eap_network_fields()`，失败删块、连上才保存。
 - core **101 passed**、GUI **12 passed**；真实 EAP 认证仍需 C 类实机。
+
+---
+
+## 第十一轮（21:30）：VM 模拟 wpa 命令序列
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 38 | 在 VM 用 `wpa_supplicant -D wired` 模拟 daemon | 分析 | `PONG`；EAP/PSK/OPEN 字段全部 `OK` | ✅ 完成 |
+| 39 | 清理模拟环境 | 清理 | epair 销毁、daemon 停止、临时文件删除 | ✅ 完成 |
+
+### 关键结果
+
+- EAP 的 8 个字段（ssid/key_mgmt/eap/identity/password/phase2/anonymous_identity/ca_cert）
+  以及 enable/select 全部被真实 wpa_supplicant 接受。
+- PSK 与 OPEN 序列同样通过。
+- `save_config` 在 wired 模拟驱动下返回 `FAIL`，该驱动不实现保存；无线落盘未验证。
+- 物理机只做过只读采集，期间出现无线断连/黑屏重启后已停止使用；
+  未在物理机上执行任何重启或写配置操作。

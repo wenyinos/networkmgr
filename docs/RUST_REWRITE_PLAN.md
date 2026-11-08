@@ -955,6 +955,24 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - core **101 passed**，GUI **12 passed**（sni 后端），`cargo fmt --check` 干净。
 - 真实 EAP 认证与动画帧需要 appindicator 后端和无线网卡，留待 C 类实机。
 
+## 33. VM 模拟 wpa 命令序列（2026-11-08 21:30）
+
+物理机（X200-BSD）在只读采集时出现无线断连/黑屏重启，按用户要求停止使用，
+改在 FreeBSD 15 VM 上用 `wpa_supplicant -D wired` + `epair` 模拟 daemon。
+
+- 成功建立 ctrl_interface：`wpa_cli -i epair99a ping` 返回 `PONG`。
+- 按 `wpa_save_eap_network()` 的参数逐条发送，全部返回 `OK`：
+  `add_network`、`ssid`、`key_mgmt`、`eap`、`identity`、`password`、`phase2`、
+  `anonymous_identity`、`ca_cert`、`enable_network`、`select_network`。
+- PSK 序列（`key_mgmt`/`proto`/`psk`）与 OPEN 序列（`key_mgmt NONE`）同样被接受。
+- `save_config` 在 `wired` 模拟驱动下返回 `FAIL`——该驱动不实现保存；
+  真实无线路径的落盘仍未验证。
+- 清理完整：删除 network block、停止 daemon、销毁 `epair99`、删除临时配置，
+  接口恢复为 `vtnet0 lo0`。
+
+**边界**：这证明 Rust 生成的 `set_network` 参数被真实 wpa_supplicant 接受，
+但不等于真实 AP 关联、EAP 认证或连接动画已经在硬件上走通；这些仍属 C 类实机范围。
+
 
 
 
