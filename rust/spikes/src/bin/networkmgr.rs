@@ -1,22 +1,26 @@
 //! 阶段 3：托盘主程序（tray-icon + 原生菜单 + 30 秒刷新）。
 //!
 //! 菜单结构对齐方案第 1.3 节第 1 条：
-//! 状态标题 → WireGuard 区 → 有线/无线区 → 已保存网络 → 扫描结果 →
-//! `Restart Networking` → `Close Network Manager`。
+//! 状态标题 → WireGuard 区 → 有线/无线区 → 已保存网络 → 忘记网络 →
+//! 扫描结果 → `Restart Networking` → `Close Network Manager`。
 //!
-//! **仍未实现**（执行时只打印日志，不假装成功）：
-//! - 扫描结果里的「连接」需要 add_network / set_network / select_network 整套流程，
-//!   骨架阶段没有做，菜单项会明确打印 `scan connect not implemented`。
-//! - 连接中的 300 ms 帧动画。
+//! 连接流程与 Python 版一致：已保存的网络直接 `select_network`；新网络先
+//! `add_network` + `set_network`，连上之后才 `save_config`，失败则删掉新建的块。
+//! PSK/WEP 口令用 GTK 对话框收集；企业级凭据仍引导用户去配置窗口。
+//!
+//! `Restart Networking` 会先弹确认框，并且只重启当前默认网卡。VM 实测无参数
+//! `service netif restart` 会让 SSH 长时间不恢复，不能直接执行。
 //!
 //! `appindicator` 后端要求调用线程有 GTK 事件循环：main 先 `gtk::init()`，
-//! 菜单与图标都在主线程构建/刷新（`TrayIcon` 内部是 `RefCell`，不能跨线程），
-//! 只有命令执行放在事件线程。
+//! 菜单与图标都在主线程构建/刷新（`TrayIcon` 内部是 `RefCell`，不能跨线程）。
+//! 菜单事件线程只把动作转发回主线程，对话框与命令分发都在主线程完成，
+//! 阻塞的系统命令再交给工作线程。
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -31,19 +35,53 @@ use tray_icon::{Icon, TrayIconBuilder, TrayIconEvent};
 const WG_CONFIG_DIR: &str = "/usr/local/etc/wireguard";
 #[cfg_attr(not(feature = "appindicator"), allow(dead_code))]
 const REFRESH_SECONDS: u32 = 30;
+/// 等一次无线连接完成的上限，与 Python `wait_for_connection()` 一致。
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Debug)]
 enum Action {
-    Restart,
+    Restart(Option<String>),
     Close,
-    Scan,
+    Scan(String),
     Configure(String),
     Disable(String),
     Enable(String),
-    Connect(String),
-    Forget(String),
+    Connect {
+        ssid: String,
+        nic: String,
+        saved_id: Option<String>,
+        security: String,
+    },
+    Forget {
+        ssid: String,
+        nic: String,
+    },
     WgUp(String),
     WgDown(String),
+}
+
+/// 菜单点击之后要走哪条连接路径。
+#[derive(Debug, PartialEq, Eq)]
+enum ConnectPlan {
+    /// 网络已保存，直接按 id 选中。
+    Saved(String),
+    /// 开放网络，不需要口令。
+    Open,
+    /// PSK / WEP，需要先问口令。
+    Password,
+    /// 企业级网络，托盘不收集凭据。
+    Unsupported,
+}
+
+fn connect_plan(security: &str, saved_id: Option<String>) -> ConnectPlan {
+    if let Some(id) = saved_id {
+        return ConnectPlan::Saved(id);
+    }
+    match security {
+        "OPEN" => ConnectPlan::Open,
+        "WPA2-PSK" | "WPA-PSK" | "WPA3-SAE" | "WEP" => ConnectPlan::Password,
+        _ => ConnectPlan::Unsupported,
+    }
 }
 
 struct Snapshot {
@@ -155,60 +193,140 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
                 Action::Configure(card.clone())
             );
         }
-        if state.kind == Some("wifi") && state.connection == "Connected" {
-            if let Some(ssid) = &state.ssid {
-                add!(menu, "Forget Network", Action::Forget(ssid.clone()));
-            }
-        }
         let _ = menu.append(&PredefinedMenuItem::separator());
     }
+
+    let nic = state.card.clone().unwrap_or_default();
 
     if !snapshot.saved.is_empty() {
         let submenu = Submenu::new("Saved Networks", true);
         for network in &snapshot.saved {
             let label = format!("{} {}", network.ssid, network.flags);
-            add!(submenu, &label, Action::Connect(network.ssid.clone()));
+            add!(
+                submenu,
+                &label,
+                Action::Connect {
+                    ssid: network.ssid.clone(),
+                    nic: nic.clone(),
+                    saved_id: Some(network.id.clone()),
+                    security: String::new(),
+                }
+            );
         }
         let _ = menu.append(&submenu);
+
+        // 已保存的网络即使不在扫描范围内也要能删除，否则一个错口令的块
+        // 会永远留在 wpa_supplicant.conf 里。
+        let forget = Submenu::new("Forget Network", true);
+        for network in &snapshot.saved {
+            add!(
+                forget,
+                &network.ssid,
+                Action::Forget {
+                    ssid: network.ssid.clone(),
+                    nic: nic.clone(),
+                }
+            );
+        }
+        let _ = menu.append(&forget);
     }
 
     if state.kind == Some("wifi") {
         let submenu = Submenu::new("Connect to Network", true);
-        add!(submenu, "Scan for Networks", Action::Scan);
+        add!(submenu, "Scan for Networks", Action::Scan(nic.clone()));
+        let saved_ids: HashMap<&str, &str> = snapshot
+            .saved
+            .iter()
+            .map(|network| (network.ssid.as_str(), network.id.as_str()))
+            .collect();
         for scan in &snapshot.scans {
+            // 已经连上的 AP 不再出现在候选里，与 Python 的 passes 行为一致。
+            if state.connection == "Connected" && state.ssid.as_deref() == Some(scan.ssid.as_str()) {
+                continue;
+            }
             add!(
                 submenu,
                 &format!("{} ({}%)", scan.ssid, scan.signal),
-                Action::Connect(scan.ssid.clone())
+                Action::Connect {
+                    ssid: scan.ssid.clone(),
+                    nic: nic.clone(),
+                    saved_id: saved_ids.get(scan.ssid.as_str()).map(|id| id.to_string()),
+                    security: scan.security.to_string(),
+                }
             );
         }
         let _ = menu.append(&submenu);
     }
 
     let _ = menu.append(&PredefinedMenuItem::separator());
-    add!(menu, "Restart Networking", Action::Restart);
+    add!(
+        menu,
+        "Restart Networking",
+        Action::Restart(state.card.clone())
+    );
     let _ = menu.append(&PredefinedMenuItem::separator());
     add!(menu, "Close Network Manager", Action::Close);
 
     (menu, actions)
 }
 
-fn execute(action: Action, card: &Option<String>) {
+/// 主线程上的动作分发：需要对话框的动作在这里弹窗，阻塞命令交给工作线程。
+fn dispatch(action: Action) {
+    match action {
+        Action::Close => std::process::exit(0),
+        Action::Restart(card) => {
+            if !confirm_restart(card.as_deref()) {
+                return;
+            }
+            thread::spawn(move || {
+                let runner = RealRunner::new();
+                let sys = Sys::new(&runner);
+                match sys.netif_restart(card.as_deref()) {
+                    Ok(()) => println!("networkmgr: netif restarted"),
+                    Err(error) => eprintln!("networkmgr: restart failed: {error}"),
+                }
+            });
+        }
+        Action::Connect {
+            ssid,
+            nic,
+            saved_id,
+            security,
+        } => match connect_plan(&security, saved_id) {
+            ConnectPlan::Saved(id) => {
+                thread::spawn(move || connect_saved(&nic, &ssid, &id));
+            }
+            ConnectPlan::Open => {
+                thread::spawn(move || connect_new(&nic, &ssid, "OPEN", None));
+            }
+            ConnectPlan::Password => {
+                if let Some(psk) = ask_password(&ssid) {
+                    thread::spawn(move || connect_new(&nic, &ssid, &security, Some(&psk)));
+                }
+            }
+            ConnectPlan::Unsupported => show_message(
+                "Enterprise network",
+                &format!("{ssid} needs 802.1X credentials; use the configuration window."),
+            ),
+        },
+        Action::Forget { ssid, nic } => {
+            thread::spawn(move || forget_network(&nic, &ssid));
+        }
+        other => {
+            thread::spawn(move || execute(other));
+        }
+    }
+}
+
+fn execute(action: Action) {
     let runner = RealRunner::new();
     let sys = Sys::new(&runner);
     match action {
-        Action::Close => std::process::exit(0),
-        Action::Restart => match sys.service("netif", "restart") {
-            Ok(()) => println!("networkmgr: netif restarted"),
-            Err(error) => eprintln!("networkmgr: restart failed: {error}"),
-        },
-        Action::Scan => {
-            if let Some(card) = card {
-                println!(
-                    "networkmgr: scan requested on {card}: {}",
-                    sys.wpa_scan(card)
-                );
-            }
+        Action::Scan(card) => {
+            println!(
+                "networkmgr: scan requested on {card}: {}",
+                sys.wpa_scan(&card)
+            );
         }
         Action::Disable(nic) => {
             let _ = sys.ifconfig_args(&[&nic, "down"]);
@@ -221,12 +339,6 @@ fn execute(action: Action, card: &Option<String>) {
         Action::Configure(nic) => {
             println!("networkmgr: configure {nic} -> 阶段 2 的配置窗口，尚未接线");
         }
-        Action::Forget(ssid) => println!("networkmgr: forget {ssid} not implemented in skeleton"),
-        Action::Connect(ssid) => {
-            println!(
-                "networkmgr: scan connect {ssid} not implemented (needs add/set/select_network)"
-            )
-        }
         Action::WgUp(device) => {
             let _ = sys.wg_quick("up", &device);
             println!("networkmgr: wg-quick up {device}");
@@ -235,7 +347,146 @@ fn execute(action: Action, card: &Option<String>) {
             let _ = sys.wg_quick("down", &device);
             println!("networkmgr: wg-quick down {device}");
         }
+        _ => {}
     }
+}
+
+fn connect_saved(nic: &str, ssid: &str, id: &str) {
+    let runner = RealRunner::new();
+    let sys = Sys::new(&runner);
+    if !sys.wpa_select_network(nic, id) {
+        eprintln!("networkmgr: {ssid} could not be selected");
+        return;
+    }
+    finish_connection(&sys, nic, ssid, true, id);
+}
+
+fn connect_new(nic: &str, ssid: &str, security: &str, psk: Option<&str>) {
+    let runner = RealRunner::new();
+    let sys = Sys::new(&runner);
+    let Some(id) = sys.wpa_save_network(nic, ssid, security, psk) else {
+        eprintln!("networkmgr: could not create a network block for {ssid}");
+        return;
+    };
+    if !sys.wpa_select_network(nic, &id) {
+        sys.wpa_remove_network(nic, &id);
+        eprintln!("networkmgr: {ssid} could not be selected");
+        return;
+    }
+    finish_connection(&sys, nic, ssid, false, &id);
+}
+
+fn finish_connection(sys: &Sys<'_, RealRunner>, nic: &str, ssid: &str, saved: bool, id: &str) {
+    if sys.wpa_wait_for_connection(nic, ssid, CONNECT_TIMEOUT) {
+        // 连上才写盘：错口令永远不会落进 wpa_supplicant.conf。
+        let _ = sys.wpa_save_config(nic);
+        println!("networkmgr: connected to {ssid}");
+    } else if saved {
+        eprintln!("networkmgr: could not connect to {ssid}; saved block kept");
+    } else {
+        // 新建的块没连上就删掉，避免留下一个永远连不上的配置。
+        sys.wpa_remove_network(nic, id);
+        eprintln!("networkmgr: could not connect to {ssid}; block removed");
+    }
+    // select_network 禁用了其他网络，结束时必须恢复。
+    let _ = sys.wpa_enable_all(nic);
+}
+
+fn forget_network(nic: &str, ssid: &str) {
+    let runner = RealRunner::new();
+    let sys = Sys::new(&runner);
+    let _ = sys.wpa_reconfigure(nic);
+    if !sys.wpa_remove_by_ssid(nic, ssid) {
+        eprintln!("networkmgr: no saved block for {ssid}");
+        return;
+    }
+    let _ = sys.wpa_save_config(nic);
+    println!("networkmgr: forgot {ssid}");
+}
+
+#[cfg(feature = "appindicator")]
+fn confirm_restart(card: Option<&str>) -> bool {
+    use gtk::prelude::*;
+    let target = card.unwrap_or("all interfaces");
+    let text = format!(
+        "Restart networking on {target}?\n\nThe interface goes down briefly and the connection may drop."
+    );
+    let dialog = gtk::Dialog::with_buttons(
+        Some("Restart Networking"),
+        None::<&gtk::Window>,
+        gtk::DialogFlags::MODAL,
+        &[
+            ("Cancel", gtk::ResponseType::Cancel),
+            ("Restart", gtk::ResponseType::Ok),
+        ],
+    );
+    dialog.set_default_response(gtk::ResponseType::Cancel);
+    dialog.content_area().add(&gtk::Label::new(Some(&text)));
+    dialog.show_all();
+    let response = dialog.run();
+    dialog.close();
+    response == gtk::ResponseType::Ok
+}
+
+#[cfg(not(feature = "appindicator"))]
+fn confirm_restart(_card: Option<&str>) -> bool {
+    eprintln!("networkmgr: restart needs the appindicator (GTK) backend");
+    false
+}
+
+#[cfg(feature = "appindicator")]
+fn ask_password(ssid: &str) -> Option<String> {
+    use gtk::prelude::*;
+    let dialog = gtk::Dialog::with_buttons(
+        Some(&format!("Connect to {ssid}")),
+        None::<&gtk::Window>,
+        gtk::DialogFlags::MODAL,
+        &[
+            ("Cancel", gtk::ResponseType::Cancel),
+            ("Connect", gtk::ResponseType::Ok),
+        ],
+    );
+    dialog.set_default_response(gtk::ResponseType::Ok);
+    let entry = gtk::Entry::new();
+    entry.set_visibility(false);
+    entry.set_activates_default(true);
+    entry.set_placeholder_text(Some("Wi-Fi password"));
+    dialog.content_area().add(&entry);
+    dialog.show_all();
+    let response = dialog.run();
+    let text = entry.text().to_string();
+    dialog.close();
+    if response == gtk::ResponseType::Ok && !text.is_empty() {
+        Some(text)
+    } else {
+        None
+    }
+}
+
+#[cfg(not(feature = "appindicator"))]
+fn ask_password(ssid: &str) -> Option<String> {
+    eprintln!("networkmgr: password prompt for {ssid} needs the appindicator (GTK) backend");
+    None
+}
+
+#[cfg(feature = "appindicator")]
+fn show_message(title: &str, text: &str) {
+    use gtk::prelude::*;
+    let dialog = gtk::MessageDialog::new(
+        None::<&gtk::Window>,
+        gtk::DialogFlags::MODAL,
+        gtk::MessageType::Info,
+        gtk::ButtonsType::Ok,
+        text,
+    );
+    dialog.set_title(title);
+    dialog.connect_response(|dialog, _| dialog.close());
+    dialog.show_all();
+}
+
+#[cfg(not(feature = "appindicator"))]
+fn show_message(_title: &str, text: &str) {
+    eprintln!("networkmgr: {text}");
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -289,10 +540,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(600);
     let deadline = Instant::now() + Duration::from_secs(seconds);
 
+    // 菜单事件线程只转发动作；对话框和命令分发都回到主线程。
+    let (action_tx, action_rx) = mpsc::channel::<Action>();
     let menu_rx = MenuEvent::receiver();
     let icon_rx = TrayIconEvent::receiver();
     let actions_events = Arc::clone(&actions);
-    let card = snapshot.state.card.clone();
     thread::spawn(move || loop {
         if let Ok(event) = menu_rx.try_recv() {
             let action = actions_events
@@ -301,7 +553,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .get(&event.id.0)
                 .cloned();
             match action {
-                Some(action) => execute(action, &card),
+                Some(action) => {
+                    let _ = action_tx.send(action);
+                }
                 None => println!("networkmgr: unknown menu id {:?}", event.id),
             }
         }
@@ -316,11 +570,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     #[cfg(feature = "appindicator")]
-    gtk::main();
+    {
+        gtk::glib::timeout_add_local(Duration::from_millis(100), move || {
+            while let Ok(action) = action_rx.try_recv() {
+                dispatch(action);
+            }
+            gtk::glib::ControlFlow::Continue
+        });
+        gtk::main();
+    }
 
     #[cfg(not(feature = "appindicator"))]
     loop {
-        thread::sleep(Duration::from_secs(1));
+        while let Ok(action) = action_rx.try_recv() {
+            dispatch(action);
+        }
+        thread::sleep(Duration::from_millis(200));
     }
 
     #[cfg(feature = "appindicator")]
@@ -421,5 +686,22 @@ mod tests {
         for signal in [None, Some(0), Some(30), Some(60), Some(90)] {
             drop(icon_for(signal, true));
         }
+    }
+
+    #[test]
+    fn connect_plan_prefers_saved_blocks_and_classifies_security() {
+        assert_eq!(
+            connect_plan("", Some("3".to_string())),
+            ConnectPlan::Saved("3".to_string())
+        );
+        assert_eq!(connect_plan("OPEN", None), ConnectPlan::Open);
+        for security in ["WPA2-PSK", "WPA-PSK", "WPA3-SAE", "WEP"] {
+            assert_eq!(
+                connect_plan(security, None),
+                ConnectPlan::Password,
+                "{security} should ask for a passphrase"
+            );
+        }
+        assert_eq!(connect_plan("WPA2-EAP", None), ConnectPlan::Unsupported);
     }
 }

@@ -115,6 +115,65 @@ pub fn security_from_flags(flags: &str) -> &'static str {
     "OPEN"
 }
 
+/// `wpa_cli add_network` 的响应：最后一行的十进制网络 id。
+///
+/// 输出可能带 banner，Python 版取 `splitlines()[-1]`，这里保持一致。
+/// 不是数字（例如 `FAIL`）时返回 `None`。
+pub fn parse_network_id(text: &str) -> Option<String> {
+    let last = text.lines().last()?.trim();
+    last.parse::<u32>().ok().map(|id| id.to_string())
+}
+
+/// 构造一条新网络的 `set_network` 字段，顺序与 Python `save_psk_network` /
+/// `save_open_network` 逐项一致。
+///
+/// 企业级（EAP）不在托盘里收集凭据，返回 `None` 让调用方引导用户去配置窗口。
+/// WPA2/WPA3 过渡网络按 RSN 写入：同一口令就能加入，SAE 只影响 daemon 侧。
+pub fn connect_fields(
+    ssid: &str,
+    security: &str,
+    psk: Option<&str>,
+) -> Option<Vec<(&'static str, String)>> {
+    let ssid = quoted(ssid);
+    let fields = match security {
+        "WPA2-PSK" | "WPA3-SAE" => vec![
+            ("ssid", ssid),
+            ("key_mgmt", "WPA-PSK".to_string()),
+            ("proto", "RSN".to_string()),
+            ("psk", plain_quoted(psk?)),
+        ],
+        "WPA-PSK" => vec![
+            ("ssid", ssid),
+            ("key_mgmt", "WPA-PSK".to_string()),
+            ("proto", "WPA".to_string()),
+            ("psk", plain_quoted(psk?)),
+        ],
+        "WEP" => vec![
+            ("ssid", ssid),
+            ("key_mgmt", "NONE".to_string()),
+            ("wep_tx_keyidx", "0".to_string()),
+            ("wep_key0", wep_key_value(psk?)),
+        ],
+        "OPEN" => vec![("ssid", ssid), ("key_mgmt", "NONE".to_string())],
+        _ => return None,
+    };
+    Some(fields)
+}
+
+/// WEP 密钥：10/26/32 位十六进制按 hex 原样写入，其余按 ASCII 加引号。
+///
+/// wpa_supplicant 对裸值和引号值的解释不同，长度与字符集必须同时匹配，
+/// 否则一个纯数字口令会被当成非法 hex 而连接失败。
+fn wep_key_value(key: &str) -> String {
+    let is_hex =
+        matches!(key.len(), 10 | 26 | 32) && key.bytes().all(|byte| byte.is_ascii_hexdigit());
+    if is_hex {
+        key.to_string()
+    } else {
+        quoted(key)
+    }
+}
+
 /// 把 `wpa_cli status` 之类的 key=value 输出转成 map。
 ///
 /// 没有等号的行（例如开头的 `Selected interface 'wlan0'` 横幅）直接忽略，
@@ -428,5 +487,56 @@ mod tests {
             Some("192.168.1.5")
         );
         assert_eq!(values.len(), 3);
+    }
+
+    #[test]
+    fn add_network_id_comes_from_the_last_line() {
+        assert_eq!(parse_network_id("0\n"), Some("0".to_string()));
+        assert_eq!(parse_network_id("12"), Some("12".to_string()));
+        assert_eq!(parse_network_id("FAIL\n"), None);
+        assert_eq!(parse_network_id(""), None);
+    }
+
+    #[test]
+    fn psk_fields_match_the_python_writer() {
+        let fields = connect_fields("中文 Net", "WPA2-PSK", Some("p\"ss")).unwrap();
+        assert_eq!(
+            fields,
+            vec![
+                ("ssid", r#"P"\xe4\xb8\xad\xe6\x96\x87 Net""#.to_string()),
+                ("key_mgmt", "WPA-PSK".to_string()),
+                ("proto", "RSN".to_string()),
+                ("psk", "\"p\"ss\"".to_string()),
+            ]
+        );
+
+        let legacy = connect_fields("Old", "WPA-PSK", Some("secret")).unwrap();
+        assert_eq!(legacy[2], ("proto", "WPA".to_string()));
+
+        // 过渡网络按 RSN 写入，口令即可加入。
+        let transition = connect_fields("Edge", "WPA3-SAE", Some("secret")).unwrap();
+        assert_eq!(transition[1], ("key_mgmt", "WPA-PSK".to_string()));
+        assert_eq!(transition[2], ("proto", "RSN".to_string()));
+    }
+
+    #[test]
+    fn open_and_wep_fields_match_the_python_writer() {
+        let open = connect_fields("Guest", "OPEN", None).unwrap();
+        assert_eq!(open.len(), 2);
+        assert_eq!(open[1], ("key_mgmt", "NONE".to_string()));
+
+        let hex = connect_fields("Old", "WEP", Some("0011223344")).unwrap();
+        assert_eq!(hex[3], ("wep_key0", "0011223344".to_string()));
+        let ascii = connect_fields("Old", "WEP", Some("abcde")).unwrap();
+        assert_eq!(ascii[3], ("wep_key0", "P\"abcde\"".to_string()));
+        // 10 位但不是 hex，必须按 ASCII 加引号。
+        let not_hex = connect_fields("Old", "WEP", Some("00112233zz")).unwrap();
+        assert_eq!(not_hex[3], ("wep_key0", "P\"00112233zz\"".to_string()));
+    }
+
+    #[test]
+    fn enterprise_and_missing_passphrases_are_rejected() {
+        assert!(connect_fields("Corp", "WPA2-EAP", None).is_none());
+        assert!(connect_fields("Home", "WPA2-PSK", None).is_none());
     }
 }

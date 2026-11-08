@@ -303,6 +303,142 @@ impl<'a, R: Runner> Sys<'a, R> {
             .is_some_and(|output| output.success && !output.text.contains("FAIL"))
     }
 
+    /// `wpa_cli add_network`，返回新的网络 id；失败返回 `None`。
+    pub fn wpa_add_network(&self, nic: &str) -> Option<String> {
+        let output = self.run("wpa_cli", &["-i", nic, "add_network"])?;
+        if !output.success || output.text.contains("FAIL") {
+            return None;
+        }
+        wpa::parse_network_id(&output.text)
+    }
+
+    /// `wpa_cli set_network <id> <name> <value>`；只有 daemon 回 OK 才算成功。
+    pub fn wpa_set_network(&self, nic: &str, id: &str, name: &str, value: &str) -> bool {
+        self.wpa_command(nic, &["set_network", id, name, value])
+    }
+
+    /// `wpa_cli enable_network <id>`。
+    pub fn wpa_enable_network(&self, nic: &str, id: &str) -> bool {
+        self.wpa_command(nic, &["enable_network", id])
+    }
+
+    /// `wpa_cli enable_network all`：恢复 `select_network` 禁用的其他网络。
+    pub fn wpa_enable_all(&self, nic: &str) -> bool {
+        self.wpa_command(nic, &["enable_network", "all"])
+    }
+
+    /// `wpa_cli select_network <id>`：只选一个网络，其他会被禁用。
+    pub fn wpa_select_network(&self, nic: &str, id: &str) -> bool {
+        self.wpa_command(nic, &["select_network", id])
+    }
+
+    /// `wpa_cli remove_network <id>`。
+    pub fn wpa_remove_network(&self, nic: &str, id: &str) -> bool {
+        self.wpa_command(nic, &["remove_network", id])
+    }
+
+    /// `wpa_cli reconfigure`，让 daemon 重新读取内存中的配置。
+    pub fn wpa_reconfigure(&self, nic: &str) -> bool {
+        self.wpa_command(nic, &["reconfigure"])
+    }
+
+    /// 已保存网络里与 `ssid` 同名的第一个 id，顺序与 `list_networks` 一致。
+    pub fn wpa_saved_id(&self, nic: &str, ssid: &str) -> Option<String> {
+        wpa::wpa_networks(&self.wpa_list_networks(nic))
+            .into_iter()
+            .find(|network| network.ssid == ssid)
+            .map(|network| network.id)
+    }
+
+    /// 删除所有同名网络块。
+    ///
+    /// 从最大的 id 开始删：`wpa_supplicant` 在删除后会把后面的 id 前移，
+    /// 倒序删除可以让一次读到的 id 全部有效，不必边删边重读。
+    pub fn wpa_remove_by_ssid(&self, nic: &str, ssid: &str) -> bool {
+        let mut ids: Vec<(u32, String)> = wpa::wpa_networks(&self.wpa_list_networks(nic))
+            .into_iter()
+            .filter(|network| network.ssid == ssid)
+            .filter_map(|network| network.id.parse::<u32>().ok().map(|id| (id, network.id)))
+            .collect();
+        ids.sort_by(|a, b| b.0.cmp(&a.0));
+        let mut removed = false;
+        for (_, id) in ids {
+            if self.wpa_remove_network(nic, &id) {
+                removed = true;
+            }
+        }
+        removed
+    }
+
+    /// 新建并启用一个 network block，返回 id。
+    ///
+    /// 任一步失败都会删掉半成品：残留的块会让下一次连接选中错误的口令，
+    /// 而且它会以 disabled 状态留在 `wpa_supplicant.conf` 里。
+    pub fn wpa_save_network(
+        &self,
+        nic: &str,
+        ssid: &str,
+        security: &str,
+        psk: Option<&str>,
+    ) -> Option<String> {
+        let fields = wpa::connect_fields(ssid, security, psk)?;
+        let id = self.wpa_add_network(nic)?;
+        for (name, value) in &fields {
+            if !self.wpa_set_network(nic, &id, name, value) {
+                self.wpa_remove_network(nic, &id);
+                return None;
+            }
+        }
+        if !self.wpa_enable_network(nic, &id) {
+            self.wpa_remove_network(nic, &id);
+            return None;
+        }
+        Some(id)
+    }
+
+    /// 等待 `ssid` 真正连上。
+    ///
+    /// 只看 `wpa_state=COMPLETED` 不够：`select_network` 之后的一小段时间里
+    /// daemon 仍会报告上一次的关联，所以 SSID 必须一起匹配。
+    pub fn wpa_wait_for_connection(&self, nic: &str, ssid: &str, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let status = self.wpa_status(nic);
+            if status.get("wpa_state").map(String::as_str) == Some("COMPLETED")
+                && status.get("ssid").map(String::as_str) == Some(ssid)
+            {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            thread::sleep(Duration::from_millis(500));
+        }
+    }
+
+    /// `service netif restart [iface]`。
+    ///
+    /// 指定接口时只重启该接口；不带参数会重启所有接口，实测可能让 SSH
+    /// 长时间不恢复，所以调用方必须优先传接口名。
+    pub fn netif_restart(&self, iface: Option<&str>) -> Result<(), SysError> {
+        let mut args = vec![
+            "service".to_string(),
+            "netif".to_string(),
+            "restart".to_string(),
+        ];
+        if let Some(iface) = iface {
+            args.push(iface.to_string());
+        }
+        self.call(&args)
+    }
+
+    fn wpa_command(&self, nic: &str, args: &[&str]) -> bool {
+        let mut full = vec!["-i", nic];
+        full.extend_from_slice(args);
+        self.run("wpa_cli", &full)
+            .is_some_and(|output| output.success && !output.text.contains("FAIL"))
+    }
+
     /// `sysrc -n <name>`，变量没设过时返回空串。
     pub fn sysrc_get(&self, name: &str) -> String {
         self.text("sysrc", &["-n", name])
@@ -538,6 +674,144 @@ mod tests {
     fn save_config_reports_failure_on_fail_output() {
         let fake = FakeRunner::new().expect("wpa_cli -i wlan0 save_config", true, "FAIL\n");
         assert!(!Sys::new(&fake).wpa_save_config("wlan0"));
+    }
+
+    #[test]
+    fn add_network_returns_the_daemon_id() {
+        let fake = FakeRunner::new().expect("wpa_cli -i wlan0 add_network", true, "3\n");
+        assert_eq!(
+            Sys::new(&fake).wpa_add_network("wlan0"),
+            Some("3".to_string())
+        );
+
+        let failed = FakeRunner::new().expect("wpa_cli -i wlan0 add_network", true, "FAIL\n");
+        assert_eq!(Sys::new(&failed).wpa_add_network("wlan0"), None);
+    }
+
+    #[test]
+    fn save_network_writes_the_python_fields_in_order() {
+        let fake = FakeRunner::new()
+            .expect("wpa_cli -i wlan0 add_network", true, "3\n")
+            .expect(
+                "wpa_cli -i wlan0 set_network 3 ssid P\"Home\"",
+                true,
+                "OK\n",
+            )
+            .expect(
+                "wpa_cli -i wlan0 set_network 3 key_mgmt WPA-PSK",
+                true,
+                "OK\n",
+            )
+            .expect("wpa_cli -i wlan0 set_network 3 proto RSN", true, "OK\n")
+            .expect(
+                "wpa_cli -i wlan0 set_network 3 psk \"secret\"",
+                true,
+                "OK\n",
+            )
+            .expect("wpa_cli -i wlan0 enable_network 3", true, "OK\n");
+        let id = Sys::new(&fake).wpa_save_network("wlan0", "Home", "WPA2-PSK", Some("secret"));
+        assert_eq!(id, Some("3".to_string()));
+        assert_eq!(
+            fake.calls(),
+            vec![
+                "wpa_cli -i wlan0 add_network",
+                "wpa_cli -i wlan0 set_network 3 ssid P\"Home\"",
+                "wpa_cli -i wlan0 set_network 3 key_mgmt WPA-PSK",
+                "wpa_cli -i wlan0 set_network 3 proto RSN",
+                "wpa_cli -i wlan0 set_network 3 psk \"secret\"",
+                "wpa_cli -i wlan0 enable_network 3",
+            ]
+        );
+    }
+
+    #[test]
+    fn save_network_removes_the_block_when_a_field_fails() {
+        let fake = FakeRunner::new()
+            .expect("wpa_cli -i wlan0 add_network", true, "7\n")
+            .expect(
+                "wpa_cli -i wlan0 set_network 7 ssid P\"Home\"",
+                true,
+                "OK\n",
+            )
+            .expect(
+                "wpa_cli -i wlan0 set_network 7 key_mgmt WPA-PSK",
+                true,
+                "OK\n",
+            )
+            .expect("wpa_cli -i wlan0 set_network 7 proto RSN", true, "OK\n")
+            .expect("wpa_cli -i wlan0 set_network 7 psk \"bad\"", true, "FAIL\n");
+        assert_eq!(
+            Sys::new(&fake).wpa_save_network("wlan0", "Home", "WPA2-PSK", Some("bad")),
+            None
+        );
+        assert!(fake
+            .calls()
+            .contains(&"wpa_cli -i wlan0 remove_network 7".to_string()));
+        assert!(!fake
+            .calls()
+            .contains(&"wpa_cli -i wlan0 enable_network 7".to_string()));
+    }
+
+    #[test]
+    fn saved_id_and_remove_by_ssid_use_the_list_networks_table() {
+        let table = concat!(
+            "network id / ssid / bssid / flags\n",
+            "0\tHome\tany\t[CURRENT]\n",
+            "1\tCafe\tany\t\n",
+            "2\tHome\tany\t\n",
+        );
+        let fake = FakeRunner::new()
+            .expect("wpa_cli -i wlan0 list_networks", true, table)
+            .expect("wpa_cli -i wlan0 remove_network 2", true, "OK\n")
+            .expect("wpa_cli -i wlan0 remove_network 0", true, "OK\n");
+        let sys = Sys::new(&fake);
+        assert_eq!(sys.wpa_saved_id("wlan0", "Home"), Some("0".to_string()));
+        assert_eq!(sys.wpa_saved_id("wlan0", "Missing"), None);
+        assert!(sys.wpa_remove_by_ssid("wlan0", "Home"));
+        // 倒序删除，避免删掉低 id 后高 id 前移。
+        let removals: Vec<_> = fake
+            .calls()
+            .into_iter()
+            .filter(|call| call.starts_with("wpa_cli -i wlan0 remove_network"))
+            .collect();
+        assert_eq!(
+            removals,
+            vec![
+                "wpa_cli -i wlan0 remove_network 2",
+                "wpa_cli -i wlan0 remove_network 0",
+            ]
+        );
+    }
+
+    #[test]
+    fn netif_restart_can_target_one_interface() {
+        let fake = FakeRunner::new();
+        Sys::new(&fake).netif_restart(Some("wlan0")).unwrap();
+        assert_eq!(fake.calls(), vec!["service netif restart wlan0"]);
+
+        let all = FakeRunner::new();
+        Sys::new(&all).netif_restart(None).unwrap();
+        assert_eq!(all.calls(), vec!["service netif restart"]);
+    }
+
+    #[test]
+    fn wait_for_connection_requires_the_ssid_to_match() {
+        let fake = FakeRunner::new()
+            .expect(
+                "wpa_cli -i wlan0 status",
+                true,
+                "wpa_state=COMPLETED\nssid=Old\n",
+            )
+            .expect(
+                "wpa_cli -i wlan0 status",
+                true,
+                "wpa_state=COMPLETED\nssid=Old\n",
+            );
+        assert!(!Sys::new(&fake).wpa_wait_for_connection(
+            "wlan0",
+            "Home",
+            Duration::from_millis(600)
+        ));
     }
 
     #[test]
