@@ -235,8 +235,11 @@
   `LANG`/`LC_ALL` 选择语言，`NETWORKMGR_LOCALE_DIR` 与 `NETWORKMGR_MO` 用于未安装运行。
   `NETWORKMGR_MO=/tmp/zh_CN.mo cargo test global_translation` 断言
   “Restart Networking” → “重启网络”。
-- **复用现有 po，不新增条目**：`zh_CN.po` 换用 `i18n/complete-zh-cn` 分支已修好的版本
-  （原版把 “Forget Network” 译成“以太网”）。配置窗口与新菜单项没有对应条目，按规则回退英文。
+- **7 个 po 全部补齐**：配置窗口与新增菜单项共 27 条 msgid，de / nb_NO / pt_Br / ru / sv / zh_CN
+  均已翻译；`msgfmt --check` 通过。`zh_CN.po` 采用 `i18n/complete-zh-cn` 分支已修好的旧条目。
+- **区域名回退**：`de_DE` → `de`，与 gettext 一致；新增单测覆盖。
+- **中文窗口实测**：本机 `LANG=zh_CN.UTF-8` 运行配置窗口，明暗两套截图已覆盖
+  `docs/images/config-{light,dark}.png`；德文界面也验证了按语言切换。
 - **托盘中文实测**：VM 上 `LANG=zh_CN.UTF-8` 启动，菜单依次显示
   “有线 vtnet0 已连接 / 禁用 vtnet0 / 配置 vtnet0 / 重启网络 / 退出网络管理器”。
 - **devd 迁移**：`is_not_nic` 保留原正则的任意位置匹配语义；`link_down` 倒序/标记文件/
@@ -250,6 +253,6 @@
 
 - **远端 CI 未产出本次二进制**：`anyvm` 下载连续 504（外部服务），改用 VM 内
   `pkg install rust` + 本机 Cargo registry 离线构建，3 分 37 秒编译成功。
-- 配置窗口字符串没有 `.po` 条目，按指令不补翻译，界面回退英文。
+- 7 个 po 已补齐本次条目；未来新增但未翻译的字符串仍会按 gettext 规则回退英文。
 - FreeBSD port 尚未迁移到 Rust，仍没有可安装包；`sudoers`/desktop 的安装路径需在 port 阶段定稿。
 - C 类实机（真实 Wi-Fi / EAP）仍未验收。

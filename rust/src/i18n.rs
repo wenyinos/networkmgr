@@ -193,7 +193,20 @@ fn load_from_env() -> Option<Catalog> {
     let dir = std::env::var_os(LOCALE_DIR_ENV)
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_LOCALE_DIR));
-    load(&dir, &lang)
+    load_with_fallback(&dir, &lang)
+}
+
+/// 先找完整语言名（`de_DE`），再退到基语言（`de`），与 gettext 的查找顺序一致。
+fn load_with_fallback(dir: &Path, lang: &str) -> Option<Catalog> {
+    if let Some(catalog) = load(dir, lang) {
+        return Some(catalog);
+    }
+    let base = lang.split('_').next().unwrap_or(lang);
+    if base == lang {
+        None
+    } else {
+        load(dir, base)
+    }
 }
 
 /// 翻译字面量消息，等价于 Python 的 `_()`。
@@ -354,6 +367,21 @@ mod tests {
             translate_or("Forget Network", catalog.as_ref()),
             "Forget Network"
         );
+    }
+
+    #[test]
+    fn locale_falls_back_to_the_base_language() {
+        let dir = std::env::temp_dir().join(format!("nm-i18n-{}", std::process::id()));
+        let lang_dir = dir.join("de").join("LC_MESSAGES");
+        std::fs::create_dir_all(&lang_dir).expect("temp locale dir");
+        std::fs::write(
+            lang_dir.join("NetworkMgr.mo"),
+            build_mo(&[("Apply", "Anwenden")]),
+        )
+        .expect("write mo");
+        let catalog = load_with_fallback(&dir, "de_DE").expect("base language should load");
+        assert_eq!(catalog.translate("Apply"), "Anwenden");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

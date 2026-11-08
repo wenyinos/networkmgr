@@ -250,3 +250,114 @@ msgstr "Passord:"
 #, python-brace-format
 #~ msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
 #~ msgstr "{ssid_info[0]} Wi-Fi-nettverksautentisering mislyktes"
+msgid "Applied %s rc.conf entries"
+msgstr "Brukte %s rc.conf-oppføringer"
+
+msgid "Apply"
+msgstr "Bruk"
+
+msgid "DNS server 1"
+msgstr "DNS-server 1"
+
+msgid "DNS server 2"
+msgstr "DNS-server 2"
+
+msgid "Dark"
+msgstr "Mørkt"
+
+msgid "Default gateway"
+msgstr "Standardgateway"
+
+msgid "Desktop"
+msgstr "Skrivebord"
+
+msgid "Desktop settings arrive with stage 3."
+msgstr "Skrivebordsinnstillinger kommer i trinn 3."
+
+msgid "Dry run (pass --apply to write):"
+msgstr "Tørrkjøring (bruk --apply for å skrive):"
+
+msgid "IP address"
+msgstr "IP-adresse"
+
+msgid "IPv6 address"
+msgstr "IPv6-adresse"
+
+msgid "Interface"
+msgstr "Grensesnitt"
+
+msgid "Light"
+msgstr "Lyst"
+
+msgid "Manual"
+msgstr "Manuell"
+
+msgid "NetworkMgr configuration"
+msgstr "NetworkMgr-konfigurasjon"
+
+msgid "Not part of NetworkMgr; kept to match the reference layout."
+msgstr "Ikke en del av NetworkMgr; beholdt for å matche referanselayouten."
+
+msgid "OS Upgrade & Recovery"
+msgstr "Systemoppgradering og gjenoppretting"
+
+msgid "Pick an interface, then choose how it gets its address."
+msgstr "Velg et grensesnitt og hvordan det får adressen."
+
+msgid "Prefix length"
+msgstr "Prefikslengde"
+
+msgid "Preview"
+msgstr "Forhåndsvisning"
+
+msgid "Search domain"
+msgstr "Søkedomene"
+
+msgid "Subnet mask"
+msgstr "Nettmaske"
+
+msgid "System network configuration"
+msgstr "Systemnettverkskonfigurasjon"
+
+msgid "Theme"
+msgstr "Tema"
+
+msgid "Validation"
+msgstr "Validering"
+
+msgid "Will write:"
+msgstr "Vil skrive:"
+
+msgid "Cancel"
+msgstr "Avbryt"
+
+msgid "Connect"
+msgstr "Koble til"
+
+msgid "Connect to %s"
+msgstr "Koble til %s"
+
+msgid "Enterprise network"
+msgstr "Bedriftsnettverk"
+
+msgid "Network card is not enabled"
+msgstr "Nettverkskortet er ikke aktivert"
+
+msgid "Restart"
+msgstr "Start på nytt"
+
+msgid "Restart networking on %s?"
+msgstr "Starte nettverket på %s på nytt?"
+
+msgid "Saved Networks"
+msgstr "Lagrede nettverk"
+
+msgid "Scan for Networks"
+msgstr "Søk etter nettverk"
+
+msgid "The interface goes down briefly and the connection may drop."
+msgstr "Grensesnittet kobles ned kort; tilkoblingen kan brytes."
+
+msgid "needs 802.1X credentials; use the configuration window."
+msgstr "krever 802.1X-innlogging; bruk konfigurasjonsvinduet."
+

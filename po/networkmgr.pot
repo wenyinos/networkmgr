@@ -240,3 +240,114 @@ msgstr ""
 #: NetworkMgr/trayicon.py:1163
 msgid "Key Password:"
 msgstr ""
+msgid "Applied %s rc.conf entries"
+msgstr ""
+
+msgid "Apply"
+msgstr ""
+
+msgid "DNS server 1"
+msgstr ""
+
+msgid "DNS server 2"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Default gateway"
+msgstr ""
+
+msgid "Desktop"
+msgstr ""
+
+msgid "Desktop settings arrive with stage 3."
+msgstr ""
+
+msgid "Dry run (pass --apply to write):"
+msgstr ""
+
+msgid "IP address"
+msgstr ""
+
+msgid "IPv6 address"
+msgstr ""
+
+msgid "Interface"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
+msgid "Manual"
+msgstr ""
+
+msgid "NetworkMgr configuration"
+msgstr ""
+
+msgid "Not part of NetworkMgr; kept to match the reference layout."
+msgstr ""
+
+msgid "OS Upgrade & Recovery"
+msgstr ""
+
+msgid "Pick an interface, then choose how it gets its address."
+msgstr ""
+
+msgid "Prefix length"
+msgstr ""
+
+msgid "Preview"
+msgstr ""
+
+msgid "Search domain"
+msgstr ""
+
+msgid "Subnet mask"
+msgstr ""
+
+msgid "System network configuration"
+msgstr ""
+
+msgid "Theme"
+msgstr ""
+
+msgid "Validation"
+msgstr ""
+
+msgid "Will write:"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Connect"
+msgstr ""
+
+msgid "Connect to %s"
+msgstr ""
+
+msgid "Enterprise network"
+msgstr ""
+
+msgid "Network card is not enabled"
+msgstr ""
+
+msgid "Restart"
+msgstr ""
+
+msgid "Restart networking on %s?"
+msgstr ""
+
+msgid "Saved Networks"
+msgstr ""
+
+msgid "Scan for Networks"
+msgstr ""
+
+msgid "The interface goes down briefly and the connection may drop."
+msgstr ""
+
+msgid "needs 802.1X credentials; use the configuration window."
+msgstr ""
+

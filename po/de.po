@@ -250,3 +250,114 @@ msgstr "Passwort:"
 #, python-brace-format
 #~ msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
 #~ msgstr "Legitimierung für WLAN {ssid_info[0]} fehlgeschlagen"
+msgid "Applied %s rc.conf entries"
+msgstr "%s rc.conf-Einträge angewendet"
+
+msgid "Apply"
+msgstr "Anwenden"
+
+msgid "DNS server 1"
+msgstr "DNS-Server 1"
+
+msgid "DNS server 2"
+msgstr "DNS-Server 2"
+
+msgid "Dark"
+msgstr "Dunkel"
+
+msgid "Default gateway"
+msgstr "Standard-Gateway"
+
+msgid "Desktop"
+msgstr "Desktop"
+
+msgid "Desktop settings arrive with stage 3."
+msgstr "Desktop-Einstellungen folgen in Stufe 3."
+
+msgid "Dry run (pass --apply to write):"
+msgstr "Testlauf (mit --apply schreiben):"
+
+msgid "IP address"
+msgstr "IP-Adresse"
+
+msgid "IPv6 address"
+msgstr "IPv6-Adresse"
+
+msgid "Interface"
+msgstr "Schnittstelle"
+
+msgid "Light"
+msgstr "Hell"
+
+msgid "Manual"
+msgstr "Manuell"
+
+msgid "NetworkMgr configuration"
+msgstr "NetworkMgr-Konfiguration"
+
+msgid "Not part of NetworkMgr; kept to match the reference layout."
+msgstr "Nicht Teil von NetworkMgr; nur zur Angleichung an das Referenzlayout."
+
+msgid "OS Upgrade & Recovery"
+msgstr "Systemaktualisierung & Wiederherstellung"
+
+msgid "Pick an interface, then choose how it gets its address."
+msgstr "Schnittstelle wählen, dann die Adressvergabe festlegen."
+
+msgid "Prefix length"
+msgstr "Präfixlänge"
+
+msgid "Preview"
+msgstr "Vorschau"
+
+msgid "Search domain"
+msgstr "Suchdomäne"
+
+msgid "Subnet mask"
+msgstr "Subnetzmaske"
+
+msgid "System network configuration"
+msgstr "Systemnetzwerkkonfiguration"
+
+msgid "Theme"
+msgstr "Design"
+
+msgid "Validation"
+msgstr "Validierung"
+
+msgid "Will write:"
+msgstr "Wird geschrieben:"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "Connect"
+msgstr "Verbinden"
+
+msgid "Connect to %s"
+msgstr "Verbinden mit %s"
+
+msgid "Enterprise network"
+msgstr "Unternehmensnetzwerk"
+
+msgid "Network card is not enabled"
+msgstr "Netzwerkkarte ist nicht aktiviert"
+
+msgid "Restart"
+msgstr "Neu starten"
+
+msgid "Restart networking on %s?"
+msgstr "Netzwerk auf %s neu starten?"
+
+msgid "Saved Networks"
+msgstr "Gespeicherte Netzwerke"
+
+msgid "Scan for Networks"
+msgstr "Nach Netzwerken suchen"
+
+msgid "The interface goes down briefly and the connection may drop."
+msgstr "Die Schnittstelle wird kurz getrennt; die Verbindung kann abbrechen."
+
+msgid "needs 802.1X credentials; use the configuration window."
+msgstr "benötigt 802.1X-Anmeldedaten; bitte das Konfigurationsfenster verwenden."
+

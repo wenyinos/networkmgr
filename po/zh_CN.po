@@ -242,3 +242,114 @@ msgstr "密钥文件 (*.pem, *.key, *.p12)"
 #: NetworkMgr/trayicon.py:1163
 msgid "Key Password:"
 msgstr "密钥密码："
+msgid "Applied %s rc.conf entries"
+msgstr "已写入 %s 条 rc.conf 配置"
+
+msgid "Apply"
+msgstr "应用"
+
+msgid "DNS server 1"
+msgstr "DNS 服务器 1"
+
+msgid "DNS server 2"
+msgstr "DNS 服务器 2"
+
+msgid "Dark"
+msgstr "深色"
+
+msgid "Default gateway"
+msgstr "默认网关"
+
+msgid "Desktop"
+msgstr "桌面"
+
+msgid "Desktop settings arrive with stage 3."
+msgstr "桌面设置将在阶段 3 提供。"
+
+msgid "Dry run (pass --apply to write):"
+msgstr "试运行（加 --apply 才会写入）："
+
+msgid "IP address"
+msgstr "IP 地址"
+
+msgid "IPv6 address"
+msgstr "IPv6 地址"
+
+msgid "Interface"
+msgstr "接口"
+
+msgid "Light"
+msgstr "浅色"
+
+msgid "Manual"
+msgstr "手动"
+
+msgid "NetworkMgr configuration"
+msgstr "NetworkMgr 配置"
+
+msgid "Not part of NetworkMgr; kept to match the reference layout."
+msgstr "不属于 NetworkMgr；仅为对齐参考布局保留。"
+
+msgid "OS Upgrade & Recovery"
+msgstr "系统升级与恢复"
+
+msgid "Pick an interface, then choose how it gets its address."
+msgstr "选择一个接口，然后决定它如何获取地址。"
+
+msgid "Prefix length"
+msgstr "前缀长度"
+
+msgid "Preview"
+msgstr "预览"
+
+msgid "Search domain"
+msgstr "搜索域"
+
+msgid "Subnet mask"
+msgstr "子网掩码"
+
+msgid "System network configuration"
+msgstr "系统网络配置"
+
+msgid "Theme"
+msgstr "主题"
+
+msgid "Validation"
+msgstr "校验"
+
+msgid "Will write:"
+msgstr "将写入："
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Connect"
+msgstr "连接"
+
+msgid "Connect to %s"
+msgstr "连接到 %s"
+
+msgid "Enterprise network"
+msgstr "企业级网络"
+
+msgid "Network card is not enabled"
+msgstr "网卡未启用"
+
+msgid "Restart"
+msgstr "重启"
+
+msgid "Restart networking on %s?"
+msgstr "重启 %s 的网络？"
+
+msgid "Saved Networks"
+msgstr "已保存网络"
+
+msgid "Scan for Networks"
+msgstr "扫描网络"
+
+msgid "The interface goes down briefly and the connection may drop."
+msgstr "接口会短暂断开，连接可能中断。"
+
+msgid "needs 802.1X credentials; use the configuration window."
+msgstr "需要 802.1X 凭据，请使用配置窗口。"
+

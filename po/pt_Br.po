@@ -250,3 +250,114 @@ msgstr "Senha:"
 #, python-brace-format
 #~ msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
 #~ msgstr "Autenticação falhou na rede Wi-Fi {ssid_info[0]}"
+msgid "Applied %s rc.conf entries"
+msgstr "%s entradas de rc.conf aplicadas"
+
+msgid "Apply"
+msgstr "Aplicar"
+
+msgid "DNS server 1"
+msgstr "Servidor DNS 1"
+
+msgid "DNS server 2"
+msgstr "Servidor DNS 2"
+
+msgid "Dark"
+msgstr "Escuro"
+
+msgid "Default gateway"
+msgstr "Gateway padrão"
+
+msgid "Desktop"
+msgstr "Área de trabalho"
+
+msgid "Desktop settings arrive with stage 3."
+msgstr "As configurações da área de trabalho chegam na etapa 3."
+
+msgid "Dry run (pass --apply to write):"
+msgstr "Simulação (use --apply para gravar):"
+
+msgid "IP address"
+msgstr "Endereço IP"
+
+msgid "IPv6 address"
+msgstr "Endereço IPv6"
+
+msgid "Interface"
+msgstr "Interface"
+
+msgid "Light"
+msgstr "Claro"
+
+msgid "Manual"
+msgstr "Manual"
+
+msgid "NetworkMgr configuration"
+msgstr "Configuração do NetworkMgr"
+
+msgid "Not part of NetworkMgr; kept to match the reference layout."
+msgstr "Não faz parte do NetworkMgr; mantido para corresponder ao layout de referência."
+
+msgid "OS Upgrade & Recovery"
+msgstr "Atualização e recuperação do sistema"
+
+msgid "Pick an interface, then choose how it gets its address."
+msgstr "Escolha uma interface e como ela obtém o endereço."
+
+msgid "Prefix length"
+msgstr "Comprimento do prefixo"
+
+msgid "Preview"
+msgstr "Pré-visualizar"
+
+msgid "Search domain"
+msgstr "Domínio de busca"
+
+msgid "Subnet mask"
+msgstr "Máscara de sub-rede"
+
+msgid "System network configuration"
+msgstr "Configuração de rede do sistema"
+
+msgid "Theme"
+msgstr "Tema"
+
+msgid "Validation"
+msgstr "Validação"
+
+msgid "Will write:"
+msgstr "Será gravado:"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Connect"
+msgstr "Conectar"
+
+msgid "Connect to %s"
+msgstr "Conectar a %s"
+
+msgid "Enterprise network"
+msgstr "Rede corporativa"
+
+msgid "Network card is not enabled"
+msgstr "A placa de rede não está ativada"
+
+msgid "Restart"
+msgstr "Reiniciar"
+
+msgid "Restart networking on %s?"
+msgstr "Reiniciar a rede em %s?"
+
+msgid "Saved Networks"
+msgstr "Redes salvas"
+
+msgid "Scan for Networks"
+msgstr "Procurar redes"
+
+msgid "The interface goes down briefly and the connection may drop."
+msgstr "A interface cai brevemente e a conexão pode ser interrompida."
+
+msgid "needs 802.1X credentials; use the configuration window."
+msgstr "requer credenciais 802.1X; use a janela de configuração."
+

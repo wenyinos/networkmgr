@@ -32,9 +32,9 @@
 
 ![中文托盘菜单](docs/images/tray-menu-zh_CN.png)
 
-> 配置窗口截图来自本机实跑（`NETWORKMGR_THEME=light|dark`），不是设计稿。默认 dry-run，
-> 只有 `--apply` 才会写入 `rc.conf` 与 `resolv.conf`。配置窗口的字符串当前没有对应的
-> `.po` 条目，因此按原文显示英文。
+> 截图来自本机实跑（`LANG=zh_CN.UTF-8`，`NETWORKMGR_THEME=light|dark`），不是设计稿。
+> 默认 dry-run，只有 `--apply` 才会写入 `rc.conf` 与 `resolv.conf`。
+> 7 种现有语言都已补齐配置窗口条目；`de_DE` 这类区域名会回退到基语言 `de`。
 
 ## 本地开发
 
@@ -86,8 +86,8 @@ VM 绿灯不等于验收完成；阶段 3 结束必须同时有 B 与 C 的记�
 - **阶段 0 / 1 已完成，阶段 2 主体完成，阶段 3 主体完成**：逻辑层全部移植并在 FreeBSD 上跑通 98 个测试，
   配置窗口能校验、预览并（`--apply`）真写；托盘支持扫描连接、密码框、Forget 与 gettext 菜单。
   仍有 300 ms 连接动画、企业级 EAP 凭据收集（引导至配置窗口）未实现。
-- **本地化**：托盘与配置窗口的字符串都已走 `tr!`，按 `LANG` 读取现有 `.mo`。现有 `.po`
-  没有配置窗口的条目，也没有为本次新增菜单项补译，因此这些位置回退英文。
+- **本地化**：托盘与配置窗口的字符串都已走 `tr!`，7 个现有 `.po` 已补齐配置窗口与新增菜单项；
+  未提供翻译的语言或条目按 gettext 规则回退英文，`de_DE` 这类区域名会回退到 `de`。
 - **没有可安装的发行包**：旧 Python 实现与 `setup.py` 已删除，但 FreeBSD port 尚未迁移到
   Rust，阶段 4（打包）仍未完成。
 - 未部署 NetworkMgr 的 FreeBSD 主机可能缺 `wpa_supplicant.conf` 的 `ctrl_interface`，

@@ -869,14 +869,16 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - 托盘与配置窗口所有用户可见字符串改走 `tr!`；动态内容用现有 pot 的 `%s` 模板：
   `tr!("Configure %s").replace("%s", card)`。状态词（Connected/Disabled 等）只用于
   展示映射，逻辑判断仍比较内部英文值。
-- **po 不新增条目、不新增翻译**：直接使用现有 7 个 `.po`；`zh_CN.po` 采用
-  `i18n/complete-zh-cn` 分支已修好的版本（原来把 “Forget Network” 译成“以太网”）。
-  现有 pot 没有配置窗口与 “Saved Networks / Scan for Networks” 等新条目，这些位置
-  按 gettext 规则回退英文。
+- **补全现有 7 个 po**：为配置窗口与新增菜单项追加 27 条 msgid，de / nb_NO / pt_Br / ru / sv / zh_CN
+  全部给出译文；`msgfmt --check` 通过。`zh_CN.po` 同时采用 `i18n/complete-zh-cn` 分支已修好的
+  旧条目（原来把 “Forget Network” 译成“以太网”）。
+- **区域名回退**：`LANG=de_DE.UTF-8` 先找 `de_DE/LC_MESSAGES`，找不到再退到 `de`，
+  与 gettext 的查找顺序一致；测试 `locale_falls_back_to_the_base_language` 覆盖。
 - 验证：`NETWORKMGR_MO=/tmp/zh_CN.mo cargo test global_translation` 通过；
   VM 上 `LANG=zh_CN.UTF-8 NETWORKMGR_MO=/tmp/zh_CN.mo` 启动托盘，菜单显示
   “有线 vtnet0 已连接 / 禁用 vtnet0 / 配置 vtnet0 / 重启网络 / 退出网络管理器”，
   截图 `docs/images/tray-menu-zh_CN.png` 已入库。
+- 配置窗口中文与德文实拍已验证（`docs/images/config-{light,dark}.png` 已换成中文版本）。
 
 ### devd 迁移
 

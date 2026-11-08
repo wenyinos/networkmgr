@@ -250,3 +250,114 @@ msgstr "Пароль:"
 #, python-brace-format
 #~ msgid "{ssid_info[0]} Wi-Fi Network Authentication failed"
 #~ msgstr "Ошибка при регистрации в сети WiFi {ssid_info[0]}"
+msgid "Applied %s rc.conf entries"
+msgstr "Применено записей rc.conf: %s"
+
+msgid "Apply"
+msgstr "Применить"
+
+msgid "DNS server 1"
+msgstr "DNS-сервер 1"
+
+msgid "DNS server 2"
+msgstr "DNS-сервер 2"
+
+msgid "Dark"
+msgstr "Тёмная"
+
+msgid "Default gateway"
+msgstr "Шлюз по умолчанию"
+
+msgid "Desktop"
+msgstr "Рабочий стол"
+
+msgid "Desktop settings arrive with stage 3."
+msgstr "Настройки рабочего стола появятся на этапе 3."
+
+msgid "Dry run (pass --apply to write):"
+msgstr "Пробный запуск (для записи добавьте --apply):"
+
+msgid "IP address"
+msgstr "IP-адрес"
+
+msgid "IPv6 address"
+msgstr "IPv6-адрес"
+
+msgid "Interface"
+msgstr "Интерфейс"
+
+msgid "Light"
+msgstr "Светлая"
+
+msgid "Manual"
+msgstr "Вручную"
+
+msgid "NetworkMgr configuration"
+msgstr "Настройка NetworkMgr"
+
+msgid "Not part of NetworkMgr; kept to match the reference layout."
+msgstr "Не входит в NetworkMgr; оставлено для соответствия макету."
+
+msgid "OS Upgrade & Recovery"
+msgstr "Обновление и восстановление системы"
+
+msgid "Pick an interface, then choose how it gets its address."
+msgstr "Выберите интерфейс и способ получения адреса."
+
+msgid "Prefix length"
+msgstr "Длина префикса"
+
+msgid "Preview"
+msgstr "Предпросмотр"
+
+msgid "Search domain"
+msgstr "Домен поиска"
+
+msgid "Subnet mask"
+msgstr "Маска подсети"
+
+msgid "System network configuration"
+msgstr "Системная конфигурация сети"
+
+msgid "Theme"
+msgstr "Тема"
+
+msgid "Validation"
+msgstr "Проверка"
+
+msgid "Will write:"
+msgstr "Будет записано:"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Connect"
+msgstr "Подключиться"
+
+msgid "Connect to %s"
+msgstr "Подключиться к %s"
+
+msgid "Enterprise network"
+msgstr "Корпоративная сеть"
+
+msgid "Network card is not enabled"
+msgstr "Сетевой адаптер не включён"
+
+msgid "Restart"
+msgstr "Перезапустить"
+
+msgid "Restart networking on %s?"
+msgstr "Перезапустить сеть на %s?"
+
+msgid "Saved Networks"
+msgstr "Сохранённые сети"
+
+msgid "Scan for Networks"
+msgstr "Сканировать сети"
+
+msgid "The interface goes down briefly and the connection may drop."
+msgstr "Интерфейс ненадолго отключится, соединение может прерваться."
+
+msgid "needs 802.1X credentials; use the configuration window."
+msgstr "требуются учётные данные 802.1X; используйте окно настройки."
+
