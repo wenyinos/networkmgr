@@ -198,6 +198,24 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t24",
+    "title": "300 ms 连接动画",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "ConnectingGuard + 0→4 格循环 + 30 秒刷新避让",
+    "criteria": "连接期间每 300 ms 换帧；结束恢复真实信号；early return 不复位失败",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t25",
+    "title": "企业级 EAP 凭据对话框与写入",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "PEAP/TTLS/TLS 表单；wpa_save_eap_network；2 条文案 × 7 语言",
+    "criteria": "字段顺序对齐 save_eap_network；失败删块；连上才 save_config",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",

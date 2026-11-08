@@ -361,3 +361,9 @@ msgstr "Die Schnittstelle wird kurz getrennt; die Verbindung kann abbrechen."
 msgid "needs 802.1X credentials; use the configuration window."
 msgstr "benötigt 802.1X-Anmeldedaten; bitte das Konfigurationsfenster verwenden."
 
+msgid "Domain suffix:"
+msgstr "Domänensuffix:"
+
+msgid "Enter the username and either the password or the TLS certificate paths."
+msgstr "Benutzername und entweder Passwort oder TLS-Zertifikatspfade eingeben."
+

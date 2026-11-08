@@ -382,8 +382,26 @@ impl<'a, R: Runner> Sys<'a, R> {
         psk: Option<&str>,
     ) -> Option<String> {
         let fields = wpa::connect_fields(ssid, security, psk)?;
+        self.wpa_save_fields(nic, &fields)
+    }
+
+    /// 企业级网络：字段顺序由 `config::eap_network_fields` 决定。
+    pub fn wpa_save_eap_network(
+        &self,
+        nic: &str,
+        ssid: &str,
+        eap: &config::EapConfig,
+    ) -> Option<String> {
+        let fields = config::eap_network_fields(ssid, eap);
+        self.wpa_save_fields(nic, &fields)
+    }
+
+    /// 用已构造好的 `set_network` 字段新建并启用一个 network block。
+    ///
+    /// 任一步失败都删掉半成品，避免留下一个永远连不上的块。
+    pub fn wpa_save_fields(&self, nic: &str, fields: &[config::NetworkField]) -> Option<String> {
         let id = self.wpa_add_network(nic)?;
-        for (name, value) in &fields {
+        for (name, value) in fields {
             if !self.wpa_set_network(nic, &id, name, value) {
                 self.wpa_remove_network(nic, &id);
                 return None;
@@ -782,6 +800,49 @@ mod tests {
         assert!(!fake
             .calls()
             .contains(&"wpa_cli -i wlan0 enable_network 7".to_string()));
+    }
+
+    #[test]
+    fn eap_network_writes_identity_password_and_phase2() {
+        let fake = FakeRunner::new()
+            .expect("wpa_cli -i wlan0 add_network", true, "4\n")
+            .expect(
+                "wpa_cli -i wlan0 set_network 4 ssid P\"Corp\"",
+                true,
+                "OK\n",
+            )
+            .expect(
+                "wpa_cli -i wlan0 set_network 4 key_mgmt WPA-EAP",
+                true,
+                "OK\n",
+            )
+            .expect("wpa_cli -i wlan0 set_network 4 eap PEAP", true, "OK\n")
+            .expect(
+                "wpa_cli -i wlan0 set_network 4 identity P\"alice\"",
+                true,
+                "OK\n",
+            )
+            .expect(
+                "wpa_cli -i wlan0 set_network 4 password P\"secret\"",
+                true,
+                "OK\n",
+            )
+            .expect(
+                "wpa_cli -i wlan0 set_network 4 phase2 P\"auth=MSCHAPV2\"",
+                true,
+                "OK\n",
+            )
+            .expect("wpa_cli -i wlan0 enable_network 4", true, "OK\n");
+        let eap = config::EapConfig {
+            eap_method: Some("PEAP".to_string()),
+            identity: "alice".to_string(),
+            password: "secret".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            Sys::new(&fake).wpa_save_eap_network("wlan0", "Corp", &eap),
+            Some("4".to_string())
+        );
     }
 
     #[test]

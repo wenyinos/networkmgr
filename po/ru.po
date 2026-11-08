@@ -361,3 +361,9 @@ msgstr "Интерфейс ненадолго отключится, соедин
 msgid "needs 802.1X credentials; use the configuration window."
 msgstr "требуются учётные данные 802.1X; используйте окно настройки."
 
+msgid "Domain suffix:"
+msgstr "Суффикс домена:"
+
+msgid "Enter the username and either the password or the TLS certificate paths."
+msgstr "Введите имя пользователя и пароль либо пути к сертификатам TLS."
+

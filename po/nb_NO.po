@@ -361,3 +361,9 @@ msgstr "Grensesnittet kobles ned kort; tilkoblingen kan brytes."
 msgid "needs 802.1X credentials; use the configuration window."
 msgstr "krever 802.1X-innlogging; bruk konfigurasjonsvinduet."
 
+msgid "Domain suffix:"
+msgstr "Domenesuffiks:"
+
+msgid "Enter the username and either the password or the TLS certificate paths."
+msgstr "Oppgi brukernavn og enten passord eller stier til TLS-sertifikater."
+

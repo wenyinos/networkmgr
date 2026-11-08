@@ -293,3 +293,21 @@
 - 配置窗口启动时读取 `ifconfig -l`；读不到时保留示例接口，不影响本机开发。
 - 本机验证 `config-window --interface vtnet0` 下拉框正确预选。
 - 真实菜单点击依赖 appindicator 后端，留待 C 类实机。
+
+---
+
+## 第十轮（20:00–20:15）：连接动画与企业级 EAP
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 35 | 300 ms 连接动画 | 构建 | `ConnectingGuard` + 0→4 格循环 + 刷新避让 | ✅ 完成 |
+| 36 | 企业级 EAP 凭据对话框 | 构建 | PEAP/TTLS/TLS 表单 + 字段校验 | ✅ 完成 |
+| 37 | EAP 写入与 po 补全 | 构建 | `wpa_save_eap_network`；2 条文案 × 7 语言 | ✅ 完成 |
+
+### 关键结果
+
+- 动画与 Python 版一致：300 ms 一帧，连接期间循环 0→4 格，结束恢复真实信号；
+  `ConnectingGuard` 处理所有 early return，30 秒刷新不会覆盖动画帧。
+- EAP 对话框支持 PEAP/TTLS/TLS；TLS 自动置灰口令与内层认证，并要求证书路径。
+- 写入路径复用 `config::eap_network_fields()`，失败删块、连上才保存。
+- core **101 passed**、GUI **12 passed**；真实 EAP 认证仍需 C 类实机。

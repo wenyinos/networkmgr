@@ -351,3 +351,9 @@ msgstr ""
 msgid "needs 802.1X credentials; use the configuration window."
 msgstr ""
 
+msgid "Domain suffix:"
+msgstr ""
+
+msgid "Enter the username and either the password or the TLS certificate paths."
+msgstr ""
+

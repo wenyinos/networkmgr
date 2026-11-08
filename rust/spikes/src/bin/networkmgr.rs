@@ -20,11 +20,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use networkmgr_core::config;
 use networkmgr_core::state::TrayState;
 use networkmgr_core::sys::{RealRunner, Sys};
 use networkmgr_core::wg::{self, WgDictionary};
@@ -37,6 +39,30 @@ const WG_CONFIG_DIR: &str = "/usr/local/etc/wireguard";
 const REFRESH_SECONDS: u32 = 30;
 /// 等一次无线连接完成的上限，与 Python `wait_for_connection()` 一致。
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+/// 动画帧间隔，与 Python 的 `GLib.timeout_add(300, ...)` 一致。
+const ANIMATION_MILLIS: u64 = 300;
+
+/// 连接尝试期间为 true；主线程据此循环播放信号格动画。
+static CONNECTING: AtomicBool = AtomicBool::new(false);
+/// 动画帧计数，每 300 ms 递增一次。
+static CONNECT_FRAME: AtomicUsize = AtomicUsize::new(0);
+
+/// 连接流程的作用域守卫：无论从哪条 return 退出，都复位动画状态。
+struct ConnectingGuard;
+
+impl ConnectingGuard {
+    fn start() -> Self {
+        CONNECT_FRAME.store(0, Ordering::Relaxed);
+        CONNECTING.store(true, Ordering::Relaxed);
+        Self
+    }
+}
+
+impl Drop for ConnectingGuard {
+    fn drop(&mut self) {
+        CONNECTING.store(false, Ordering::Relaxed);
+    }
+}
 
 #[derive(Clone, Debug)]
 enum Action {
@@ -69,7 +95,9 @@ enum ConnectPlan {
     Open,
     /// PSK / WEP，需要先问口令。
     Password,
-    /// 企业级网络，托盘不收集凭据。
+    /// 企业级网络，弹 EAP 凭据对话框。
+    Eap,
+    /// 托盘无法处理的类型。
     Unsupported,
 }
 
@@ -80,6 +108,7 @@ fn connect_plan(security: &str, saved_id: Option<String>) -> ConnectPlan {
     match security {
         "OPEN" => ConnectPlan::Open,
         "WPA2-PSK" | "WPA-PSK" | "WPA3-SAE" | "WEP" => ConnectPlan::Password,
+        security if security.ends_with("-EAP") => ConnectPlan::Eap,
         _ => ConnectPlan::Unsupported,
     }
 }
@@ -324,6 +353,11 @@ fn dispatch(action: Action) {
                     thread::spawn(move || connect_new(&nic, &ssid, &security, Some(&psk)));
                 }
             }
+            ConnectPlan::Eap => {
+                if let Some(eap) = ask_eap_credentials(&ssid) {
+                    thread::spawn(move || connect_eap(&nic, &ssid, eap));
+                }
+            }
             ConnectPlan::Unsupported => {
                 let hint = networkmgr_core::tr!(concat!(
                     "needs 802.1X credentials; ",
@@ -404,6 +438,7 @@ fn execute(action: Action) {
 }
 
 fn connect_saved(nic: &str, ssid: &str, id: &str) {
+    let _guard = ConnectingGuard::start();
     let runner = RealRunner::new();
     let sys = Sys::new(&runner);
     if !sys.wpa_select_network(nic, id) {
@@ -414,10 +449,27 @@ fn connect_saved(nic: &str, ssid: &str, id: &str) {
 }
 
 fn connect_new(nic: &str, ssid: &str, security: &str, psk: Option<&str>) {
+    let _guard = ConnectingGuard::start();
     let runner = RealRunner::new();
     let sys = Sys::new(&runner);
     let Some(id) = sys.wpa_save_network(nic, ssid, security, psk) else {
         eprintln!("networkmgr: could not create a network block for {ssid}");
+        return;
+    };
+    if !sys.wpa_select_network(nic, &id) {
+        sys.wpa_remove_network(nic, &id);
+        eprintln!("networkmgr: {ssid} could not be selected");
+        return;
+    }
+    finish_connection(&sys, nic, ssid, false, &id);
+}
+
+fn connect_eap(nic: &str, ssid: &str, eap: config::EapConfig) {
+    let _guard = ConnectingGuard::start();
+    let runner = RealRunner::new();
+    let sys = Sys::new(&runner);
+    let Some(id) = sys.wpa_save_eap_network(nic, ssid, &eap) else {
+        eprintln!("networkmgr: could not create an enterprise block for {ssid}");
         return;
     };
     if !sys.wpa_select_network(nic, &id) {
@@ -524,6 +576,170 @@ fn ask_password(ssid: &str) -> Option<String> {
     None
 }
 
+/// 企业级（802.1X）凭据对话框。
+///
+/// TLS 用客户端证书认证，没有口令与内层认证；切换方法时把无关字段置灰，
+/// 避免用户填了 password 却选 TLS 这种无效组合。
+#[cfg(feature = "appindicator")]
+fn ask_eap_credentials(ssid: &str) -> Option<config::EapConfig> {
+    use gtk::prelude::*;
+
+    let title = networkmgr_core::tr!("Enterprise Authentication for %s").replace("%s", ssid);
+    let dialog = gtk::Dialog::with_buttons(
+        Some(&title),
+        None::<&gtk::Window>,
+        gtk::DialogFlags::MODAL,
+        &[
+            (networkmgr_core::tr!("Cancel"), gtk::ResponseType::Cancel),
+            (networkmgr_core::tr!("Connect"), gtk::ResponseType::Ok),
+        ],
+    );
+    dialog.set_default_response(gtk::ResponseType::Ok);
+    dialog.set_border_width(12);
+
+    let grid = gtk::Grid::new();
+    grid.set_row_spacing(6);
+    grid.set_column_spacing(12);
+
+    let mut row = 0;
+    let add_label = |text: &str, row: i32| {
+        let label = gtk::Label::new(Some(text));
+        label.set_xalign(0.0);
+        grid.attach(&label, 0, row, 1, 1);
+    };
+
+    add_label(networkmgr_core::tr!("EAP Method:"), row);
+    let method = gtk::ComboBoxText::new();
+    for item in ["PEAP", "TTLS", "TLS"] {
+        method.append_text(Some(item));
+    }
+    method.set_active(Some(0));
+    grid.attach(&method, 1, row, 1, 1);
+    row += 1;
+
+    add_label(networkmgr_core::tr!("Username:"), row);
+    let identity = gtk::Entry::new();
+    identity.set_hexpand(true);
+    grid.attach(&identity, 1, row, 1, 1);
+    row += 1;
+
+    add_label(networkmgr_core::tr!("Password:"), row);
+    let password = gtk::Entry::new();
+    password.set_visibility(false);
+    password.set_hexpand(true);
+    grid.attach(&password, 1, row, 1, 1);
+    row += 1;
+
+    add_label(networkmgr_core::tr!("Inner Auth:"), row);
+    let phase2 = gtk::ComboBoxText::new();
+    for item in ["MSCHAPV2", "MSCHAP", "PAP", "CHAP", "GTC", "TLS"] {
+        phase2.append_text(Some(item));
+    }
+    phase2.set_active(Some(0));
+    grid.attach(&phase2, 1, row, 1, 1);
+    row += 1;
+
+    add_label(networkmgr_core::tr!("Anonymous ID:"), row);
+    let anonymous = gtk::Entry::new();
+    anonymous.set_placeholder_text(Some(networkmgr_core::tr!("Optional - for privacy")));
+    grid.attach(&anonymous, 1, row, 1, 1);
+    row += 1;
+
+    add_label(networkmgr_core::tr!("CA Certificate:"), row);
+    let ca_cert = gtk::Entry::new();
+    grid.attach(&ca_cert, 1, row, 1, 1);
+    row += 1;
+
+    add_label("Domain suffix:", row);
+    let domain = gtk::Entry::new();
+    grid.attach(&domain, 1, row, 1, 1);
+    row += 1;
+
+    add_label(networkmgr_core::tr!("Client Cert:"), row);
+    let client_cert = gtk::Entry::new();
+    grid.attach(&client_cert, 1, row, 1, 1);
+    row += 1;
+
+    add_label(networkmgr_core::tr!("Private Key:"), row);
+    let private_key = gtk::Entry::new();
+    grid.attach(&private_key, 1, row, 1, 1);
+    row += 1;
+
+    add_label(networkmgr_core::tr!("Key Password:"), row);
+    let key_password = gtk::Entry::new();
+    key_password.set_visibility(false);
+    grid.attach(&key_password, 1, row, 1, 1);
+
+    let password_toggle = password.clone();
+    let phase2_toggle = phase2.clone();
+    let client_toggle = client_cert.clone();
+    let key_toggle = private_key.clone();
+    let key_password_toggle = key_password.clone();
+    let tls_widgets = [
+        client_cert.clone(),
+        private_key.clone(),
+        key_password.clone(),
+    ];
+    method.connect_changed(move |combo| {
+        let tls = combo
+            .active_text()
+            .map(|text| text.as_str() == "TLS")
+            .unwrap_or(false);
+        password_toggle.set_sensitive(!tls);
+        phase2_toggle.set_sensitive(!tls);
+        for widget in &tls_widgets {
+            widget.set_sensitive(tls);
+        }
+    });
+    client_cert.set_sensitive(false);
+    private_key.set_sensitive(false);
+    key_password.set_sensitive(false);
+
+    dialog.content_area().add(&grid);
+    dialog.show_all();
+    let response = dialog.run();
+    let eap = config::EapConfig {
+        eap_method: method.active_text().map(|text| text.to_string()),
+        identity: identity.text().to_string(),
+        password: password.text().to_string(),
+        phase2: phase2.active_text().map(|text| text.to_string()),
+        anonymous_identity: anonymous.text().to_string(),
+        ca_cert: ca_cert.text().to_string(),
+        client_cert: client_cert.text().to_string(),
+        private_key: private_key.text().to_string(),
+        private_key_passwd: key_password.text().to_string(),
+        domain_suffix_match: domain.text().to_string(),
+    };
+    dialog.close();
+
+    if response != gtk::ResponseType::Ok {
+        return None;
+    }
+    let tls = eap.eap_method.as_deref() == Some("TLS");
+    let valid = !eap.identity.is_empty()
+        && if tls {
+            !eap.client_cert.is_empty() && !eap.private_key.is_empty()
+        } else {
+            !eap.password.is_empty()
+        };
+    if !valid {
+        show_message(
+            networkmgr_core::tr!("%s Enterprise Authentication Failed").replace("%s", ssid),
+            networkmgr_core::tr!(
+                "Enter the username and either the password or the TLS certificate paths."
+            ),
+        );
+        return None;
+    }
+    Some(eap)
+}
+
+#[cfg(not(feature = "appindicator"))]
+fn ask_eap_credentials(ssid: &str) -> Option<config::EapConfig> {
+    eprintln!("networkmgr: EAP credentials for {ssid} need the appindicator (GTK) backend");
+    None
+}
+
 #[cfg(feature = "appindicator")]
 fn show_message(title: &str, text: &str) {
     use gtk::prelude::*;
@@ -573,19 +789,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 30 秒被动刷新：菜单与图标只能在主线程重建。
     #[cfg(feature = "appindicator")]
     {
+        let latest = Rc::new(RefCell::new(snapshot.state.clone()));
         let tray_timer = Rc::clone(&tray);
         let actions_timer = Arc::clone(&actions);
+        let latest_timer = Rc::clone(&latest);
         gtk::glib::timeout_add_seconds_local(REFRESH_SECONDS, move || {
             let snapshot = gather();
             let (menu, map) = build_menu(&snapshot);
             *actions_timer.lock().expect("actions lock") = map;
+            *latest_timer.borrow_mut() = snapshot.state.clone();
             let tray = tray_timer.borrow();
             let _ = tray.set_tooltip(Some(&snapshot.state.tooltip));
-            let _ = tray.set_icon(Some(icon_for(
-                snapshot.state.signal,
-                snapshot.state.kind == Some("wifi"),
-            )));
+            // 连接动画期间不要用静态图标覆盖动画帧。
+            if !CONNECTING.load(Ordering::Relaxed) {
+                let _ = tray.set_icon(Some(icon_for(
+                    snapshot.state.signal,
+                    snapshot.state.kind == Some("wifi"),
+                )));
+            }
             tray.set_menu(Some(Box::new(menu)));
+            gtk::glib::ControlFlow::Continue
+        });
+
+        // 300 ms 一帧，与 Python 版一致：0→4 格循环，结束恢复真实信号。
+        let tray_anim = Rc::clone(&tray);
+        let latest_anim = Rc::clone(&latest);
+        let mut was_animating = false;
+        gtk::glib::timeout_add_local(Duration::from_millis(ANIMATION_MILLIS), move || {
+            if CONNECTING.load(Ordering::Relaxed) {
+                was_animating = true;
+                let frame = CONNECT_FRAME.fetch_add(1, Ordering::Relaxed) as u32 % 5;
+                let _ = tray_anim.borrow().set_icon(Some(bars_icon(frame, true)));
+            } else if was_animating {
+                was_animating = false;
+                let state = latest_anim.borrow();
+                let _ = tray_anim
+                    .borrow()
+                    .set_icon(Some(icon_for(state.signal, state.kind == Some("wifi"))));
+            }
             gtk::glib::ControlFlow::Continue
         });
     }
@@ -653,7 +894,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// 无信号/有线时画浅色实心方块：全暗图标在深色面板上等于没画，
 /// 第一次 VM 验收就吃过这个亏。
 fn icon_for(signal: Option<i32>, wireless: bool) -> Icon {
-    const SIZE: u32 = 32;
     let bars = match signal {
         None => 0,
         Some(value) if value >= 75 => 4,
@@ -661,6 +901,12 @@ fn icon_for(signal: Option<i32>, wireless: bool) -> Icon {
         Some(value) if value >= 25 => 2,
         Some(_) => 1,
     };
+    bars_icon(bars, wireless)
+}
+
+/// 直接按格数绘制，供连接动画逐帧调用（0→4 格循环）。
+fn bars_icon(bars: u32, wireless: bool) -> Icon {
+    const SIZE: u32 = 32;
     let color = if !wireless {
         (120, 120, 120)
     } else if bars >= 3 {
@@ -758,7 +1004,7 @@ mod tests {
                 "{security} should ask for a passphrase"
             );
         }
-        assert_eq!(connect_plan("WPA2-EAP", None), ConnectPlan::Unsupported);
+        assert_eq!(connect_plan("WPA2-EAP", None), ConnectPlan::Eap);
     }
 
     #[test]

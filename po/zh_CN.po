@@ -353,3 +353,9 @@ msgstr "接口会短暂断开，连接可能中断。"
 msgid "needs 802.1X credentials; use the configuration window."
 msgstr "需要 802.1X 凭据，请使用配置窗口。"
 
+msgid "Domain suffix:"
+msgstr "域后缀："
+
+msgid "Enter the username and either the password or the TLS certificate paths."
+msgstr "请输入用户名，以及密码或 TLS 证书路径。"
+

@@ -931,6 +931,30 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - 本机验证：`config-window --interface vtnet0` 的下拉框正确预选 `vtnet0`。
 - 托盘里点击 Configure 的真实交互依赖 appindicator 后端，留给 C 类实机。
 
+## 32. 连接动画与企业级 EAP（2026-11-08 20:15）
+
+### 300 ms 连接动画
+
+- 与 Python 的 `start_icon_animation` 对齐：连接尝试期间每 300 ms 把托盘图标按
+  0→4 格循环，结束后恢复真实信号；30 秒刷新在动画期间不覆盖图标。
+- 用 `AtomicBool` / `AtomicUsize` 跨线程通知主线程；`ConnectingGuard` 保证任何
+  early return 都会复位动画状态。
+- 图标绘制拆出 `bars_icon(bars, wireless)`，动画直接按格数取帧。
+
+### 企业级 EAP
+
+- 托盘 `ConnectPlan` 增加 `Eap`：安全类型以 `-EAP` 结尾时弹 GTK 凭据对话框。
+- 对话框收集 EAP 方法（PEAP/TTLS/TLS）、身份、口令、内层认证、匿名身份、
+  CA 证书、域后缀、客户端证书/私钥/密钥口令；选 TLS 时自动置灰口令与内层认证。
+- `Sys::wpa_save_eap_network()` 复用 `config::eap_network_fields()`，字段顺序与
+  `save_eap_network` 一致；任一步失败删块，连上才 `save_config`。
+- 新增 2 条文案（域后缀、校验提示）同步进 7 个 po。
+
+### 验证
+
+- core **101 passed**，GUI **12 passed**（sni 后端），`cargo fmt --check` 干净。
+- 真实 EAP 认证与动画帧需要 appindicator 后端和无线网卡，留待 C 类实机。
+
 
 
 
