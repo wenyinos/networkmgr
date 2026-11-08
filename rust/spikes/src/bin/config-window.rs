@@ -200,7 +200,6 @@ struct ConfigWindow {
     limit: Option<Duration>,
     dark: bool,
     nav: Nav,
-    last_nav: Nav,
     tab: Tab,
     /// 当前页签使用的接口列表；切换页签时由 `switch_nav` 重新填充。
     interfaces: Vec<String>,
@@ -234,6 +233,9 @@ struct ConfigWindow {
     eap_password: String,
     eap_phase2: String,
     eap_ca: String,
+    eap_client_cert: String,
+    eap_private_key: String,
+    eap_key_password: String,
     wifi_status: String,
     vpn_status: String,
     runner: RealRunner,
@@ -254,7 +256,6 @@ impl Default for ConfigWindow {
             limit: None,
             dark: false,
             nav: Nav::Wire,
-            last_nav: Nav::Wire,
             tab: Tab::Ipv4,
             interfaces: wire.clone(),
             selected: 0,
@@ -287,6 +288,9 @@ impl Default for ConfigWindow {
             eap_password: String::new(),
             eap_phase2: "MSCHAPV2".to_string(),
             eap_ca: String::new(),
+            eap_client_cert: String::new(),
+            eap_private_key: String::new(),
+            eap_key_password: String::new(),
             wifi_status: String::new(),
             vpn_status: String::new(),
             runner: RealRunner::new(),
@@ -493,6 +497,9 @@ impl ConfigWindow {
                     password: self.eap_password.clone(),
                     phase2: Some(self.eap_phase2.clone()),
                     ca_cert: self.eap_ca.clone(),
+                    client_cert: self.eap_client_cert.clone(),
+                    private_key: self.eap_private_key.clone(),
+                    private_key_passwd: self.eap_key_password.clone(),
                     ..Default::default()
                 };
                 sys.wpa_save_eap_network(&nic, &self.wifi_ssid, &eap)
@@ -749,6 +756,7 @@ impl ConfigWindow {
                 });
             }
             WifiSecurity::Eap => {
+                let tls = self.eap_method == "TLS";
                 egui::Grid::new("eap")
                     .num_columns(2)
                     .spacing([18.0, 10.0])
@@ -776,34 +784,62 @@ impl ConfigWindow {
                             networkmgr_core::tr!("Username:"),
                             &mut self.eap_identity,
                         );
-                        ui.label(
-                            RichText::new(networkmgr_core::tr!("Password:"))
-                                .size(13.0)
-                                .color(theme.text),
-                        );
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.eap_password)
-                                .password(true)
-                                .desired_width(220.0),
-                        );
-                        ui.end_row();
-                        ui.label(
-                            RichText::new(networkmgr_core::tr!("Inner Auth:"))
-                                .size(13.0)
-                                .color(theme.text),
-                        );
-                        egui::ComboBox::from_id_salt("eap_phase2")
-                            .selected_text(&self.eap_phase2)
-                            .show_ui(ui, |ui| {
-                                for method in ["MSCHAPV2", "MSCHAP", "PAP", "CHAP", "GTC", "TLS"] {
-                                    ui.selectable_value(
-                                        &mut self.eap_phase2,
-                                        method.to_string(),
-                                        method,
-                                    );
-                                }
-                            });
-                        ui.end_row();
+                        if tls {
+                            field(
+                                ui,
+                                theme,
+                                networkmgr_core::tr!("Client Cert:"),
+                                &mut self.eap_client_cert,
+                            );
+                            field(
+                                ui,
+                                theme,
+                                networkmgr_core::tr!("Private Key:"),
+                                &mut self.eap_private_key,
+                            );
+                            ui.label(
+                                RichText::new(networkmgr_core::tr!("Key Password:"))
+                                    .size(13.0)
+                                    .color(theme.text),
+                            );
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.eap_key_password)
+                                    .password(true)
+                                    .desired_width(220.0),
+                            );
+                            ui.end_row();
+                        } else {
+                            ui.label(
+                                RichText::new(networkmgr_core::tr!("Password:"))
+                                    .size(13.0)
+                                    .color(theme.text),
+                            );
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.eap_password)
+                                    .password(true)
+                                    .desired_width(220.0),
+                            );
+                            ui.end_row();
+                            ui.label(
+                                RichText::new(networkmgr_core::tr!("Inner Auth:"))
+                                    .size(13.0)
+                                    .color(theme.text),
+                            );
+                            egui::ComboBox::from_id_salt("eap_phase2")
+                                .selected_text(&self.eap_phase2)
+                                .show_ui(ui, |ui| {
+                                    for method in
+                                        ["MSCHAPV2", "MSCHAP", "PAP", "CHAP", "GTC", "TLS"]
+                                    {
+                                        ui.selectable_value(
+                                            &mut self.eap_phase2,
+                                            method.to_string(),
+                                            method,
+                                        );
+                                    }
+                                });
+                            ui.end_row();
+                        }
                         field(
                             ui,
                             theme,
@@ -975,17 +1011,6 @@ impl ConfigWindow {
 
 impl eframe::App for ConfigWindow {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // 每页内容高度差很大；切换时把窗口收到内容附近，避免大片空白。
-        if self.last_nav != self.nav {
-            self.last_nav = self.nav;
-            let height = match self.nav {
-                Nav::Wire => 400.0,
-                Nav::Wireless => 560.0,
-                Nav::Vpn => 320.0,
-            };
-            ui.ctx()
-                .send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(760.0, height)));
-        }
         let theme = Theme::for_mode(self.dark);
         apply_visuals(ui.ctx(), &theme);
 
@@ -1060,14 +1085,9 @@ fn main() -> eframe::Result<()> {
         .filter(|name| networkmgr_core::ifconfig::is_configurable_interface(name))
         .collect();
     let page = std::env::var("NETWORKMGR_PAGE").unwrap_or_default();
-    let initial_height = match page.as_str() {
-        "wire" => 400.0,
-        "vpn" => 320.0,
-        _ => 560.0,
-    };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([760.0, initial_height])
+            .with_inner_size([800.0, 640.0])
             .with_icon(window_icon())
             .with_title(networkmgr_core::tr!("NetworkMgr configuration")),
         renderer: eframe::Renderer::Glow,
@@ -1099,10 +1119,15 @@ fn main() -> eframe::Result<()> {
                 window.interfaces = window.wire_interfaces.clone();
                 window.selected = 0;
             }
-            match std::env::var("NETWORKMGR_PAGE")
-                .unwrap_or_default()
-                .as_str()
-            {
+            if std::env::var("NETWORKMGR_WIFI_SECURITY").as_deref() == Ok("eap") {
+                window.wifi_security = WifiSecurity::Eap;
+            }
+            if let Ok(method) = std::env::var("NETWORKMGR_EAP_METHOD") {
+                if ["PEAP", "TTLS", "TLS"].contains(&method.as_str()) {
+                    window.eap_method = method;
+                }
+            }
+            match page.as_str() {
                 "wire" => window.switch_nav(Nav::Wire),
                 "wireless" => window.switch_nav(Nav::Wireless),
                 "vpn" => window.switch_nav(Nav::Vpn),
