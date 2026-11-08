@@ -367,3 +367,9 @@ msgstr "Sufixo do domínio:"
 msgid "Enter the username and either the password or the TLS certificate paths."
 msgstr "Informe o nome de usuário e a senha ou os caminhos dos certificados TLS."
 
+msgid "Wi-Fi Network"
+msgstr "Rede Wi-Fi"
+
+msgid "Saved"
+msgstr "Salvo"
+

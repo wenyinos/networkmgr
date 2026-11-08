@@ -357,3 +357,9 @@ msgstr ""
 msgid "Enter the username and either the password or the TLS certificate paths."
 msgstr ""
 
+msgid "Wi-Fi Network"
+msgstr ""
+
+msgid "Saved"
+msgstr ""
+

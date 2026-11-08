@@ -83,6 +83,25 @@ pub fn wireless_parent_interface(text: &str) -> Option<&str> {
         .map(str::trim)
 }
 
+/// 配置窗口里可以配置的接口。
+///
+/// `ifconfig -l` 会列出 `lo0`、`bridge0`、`wg0` 这类伪接口，选它们写
+/// `rc.conf` 没有意义；无线克隆接口 `wlan0` 必须保留，所以不能直接复用
+/// devd 的 `is_not_nic`（它会排除 wlan）。
+pub fn is_configurable_interface(name: &str) -> bool {
+    const PSEUDO: &[&str] = &[
+        "lo", "enc", "bridge", "wg", "tun", "tap", "ppp", "faith", "gif", "stf", "ipfw", "pflog",
+        "pfsync", "usbus",
+    ];
+    if name.starts_with("vm-") {
+        return false;
+    }
+    !PSEUDO.iter().any(|prefix| {
+        name.strip_prefix(prefix)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with(|c: char| c.is_ascii_digit()))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,6 +119,24 @@ mod tests {
     fn parses_real_freebsd_15_interfaces() {
         assert_eq!(interface_names(IFCONFIG), vec!["vtnet0", "lo0"]);
         assert_eq!(ether_interfaces(ETHER), vec!["vtnet0"]);
+    }
+
+    #[test]
+    fn configurable_interfaces_skip_pseudo_devices() {
+        for name in [
+            "lo0",
+            "bridge0",
+            "wg0",
+            "tun1",
+            "vm-bhyve0",
+            "enc0",
+            "usbus0",
+        ] {
+            assert!(!is_configurable_interface(name), "{name} should be hidden");
+        }
+        for name in ["em0", "vtnet0", "wlan0", "iwn0", "em0.10"] {
+            assert!(is_configurable_interface(name), "{name} should be listed");
+        }
     }
 
     #[test]

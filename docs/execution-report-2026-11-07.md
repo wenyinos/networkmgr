@@ -329,3 +329,24 @@
 - `save_config` 在 wired 模拟驱动下返回 `FAIL`，该驱动不实现保存；无线落盘未验证。
 - 物理机只做过只读采集，期间出现无线断连/黑屏重启后已停止使用；
   未在物理机上执行任何重启或写配置操作。
+
+---
+
+## 第十二轮（21:30–21:45）：功能补齐 2–7
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 40 | 连接失败 3 次重试与重开凭据框 | 构建 | `ConnectOutcome` 状态机 + `wpa_update_psk` | ✅ 完成 |
+| 41 | 断开无线菜单 | 构建 | `Disconnect from %s` + `wpa_cli disconnect` | ✅ 完成 |
+| 42 | 配置窗口写盘后重启接口 | 构建 | `service netif restart <nic>` | ✅ 完成 |
+| 43 | 扫描后立即刷新菜单 | 构建 | `UiRequest::Refresh` | ✅ 完成 |
+| 44 | 配置窗口接口过滤 | 构建 | `is_configurable_interface()` | ✅ 完成 |
+| 45 | 配置窗口 Wi-Fi 凭据卡片 | 构建 | PSK/EAP/OPEN 表单 + `--apply` 写 daemon | ✅ 完成 |
+
+### 关键结果
+
+- 主线程统一消费 `UiRequest::{Action, ConnectOutcome, Refresh}`；连接结果不再由工作线程
+  直接删块或保存，而是交回主线程决定重试/清理。
+- 失败重试对齐 Python：最多 3 次；已保存 PSK 只改 psk，新建块删除重建；EAP 重开对话框。
+- 配置窗口的 Wi-Fi 卡片默认 dry-run，`--apply` 才写 daemon 并 `save_config`。
+- core **102**、GUI **12** 测试通过；新增 2 条文案同步 7 个 po。

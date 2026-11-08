@@ -367,3 +367,9 @@ msgstr "Domänensuffix:"
 msgid "Enter the username and either the password or the TLS certificate paths."
 msgstr "Benutzername und entweder Passwort oder TLS-Zertifikatspfade eingeben."
 
+msgid "Wi-Fi Network"
+msgstr "Wi-Fi-Netzwerk"
+
+msgid "Saved"
+msgstr "Gespeichert"
+

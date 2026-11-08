@@ -973,6 +973,23 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 **边界**：这证明 Rust 生成的 `set_network` 参数被真实 wpa_supplicant 接受，
 但不等于真实 AP 关联、EAP 认证或连接动画已经在硬件上走通；这些仍属 C 类实机范围。
 
+## 34. 功能补齐 2–7（2026-11-08 21:45）
+
+按用户要求一次完成剩余功能缺口：
+
+- **连接失败重试**：失败后按 Python 的 `MAX_ATTEMPTS = 3` 重开 PSK/EAP 对话框；
+  已保存 PSK 用 `wpa_update_psk` 只改口令，新建块先删同名块再重建；开放网络不重试。
+- **断开无线**：无线已连接时菜单显示 `Disconnect from %s`，执行 `wpa_cli disconnect`。
+- **配置窗口写盘后重启接口**：`--apply` 成功写完后执行 `service netif restart <nic>`，
+  只重启当前接口。
+- **扫描后立即刷新**：`Action::Scan` 完成后向主线程发 `Refresh`，菜单立即重建，不等 30 秒。
+- **接口过滤**：`ifconfig::is_configurable_interface()` 排除 lo/bridge/wg/tun 等伪接口，
+  保留 `wlan`；配置窗口只列可用接口。
+- **配置窗口 Wi-Fi 凭据**：Wi-Fi 页新增 SSID / PSK / EAP / OPEN 卡片，`--apply` 才写 daemon；
+  EAP 支持方法、身份、口令、内层认证、CA 证书。
+- 主线程统一处理 `UiRequest::{Action, ConnectOutcome, Refresh}`，工作线程只发事件。
+- 测试：core **102**、GUI **12**；新增 2 条文案（Wi-Fi Network / Saved）进全部 7 个 po。
+
 
 
 

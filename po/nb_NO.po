@@ -367,3 +367,9 @@ msgstr "Domenesuffiks:"
 msgid "Enter the username and either the password or the TLS certificate paths."
 msgstr "Oppgi brukernavn og enten passord eller stier til TLS-sertifikater."
 
+msgid "Wi-Fi Network"
+msgstr "Wi-Fi-nettverk"
+
+msgid "Saved"
+msgstr "Lagret"
+

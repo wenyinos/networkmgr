@@ -367,3 +367,9 @@ msgstr "Суффикс домена:"
 msgid "Enter the username and either the password or the TLS certificate paths."
 msgstr "Введите имя пользователя и пароль либо пути к сертификатам TLS."
 
+msgid "Wi-Fi Network"
+msgstr "Сеть Wi-Fi"
+
+msgid "Saved"
+msgstr "Сохранено"
+

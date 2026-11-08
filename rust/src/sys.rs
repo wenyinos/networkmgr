@@ -342,6 +342,18 @@ impl<'a, R: Runner> Sys<'a, R> {
         self.wpa_command(nic, &["reconfigure"])
     }
 
+    /// `wpa_cli disconnect`：断开当前关联，保留已保存的网络块。
+    pub fn wpa_disconnect(&self, nic: &str) -> bool {
+        self.wpa_command(nic, &["disconnect"])
+    }
+
+    /// 更新已保存网络的 psk，用于密码输错后的重试。
+    ///
+    /// 只改 psk，不删除重加，块里的其他字段（scan_ssid、proto 等）保持不变。
+    pub fn wpa_update_psk(&self, nic: &str, id: &str, psk: &str) -> bool {
+        self.wpa_set_network(nic, id, "psk", &wpa::plain_quoted(psk))
+    }
+
     /// 已保存网络里与 `ssid` 同名的第一个 id，顺序与 `list_networks` 一致。
     pub fn wpa_saved_id(&self, nic: &str, ssid: &str) -> Option<String> {
         wpa::wpa_networks(&self.wpa_list_networks(nic))

@@ -225,6 +225,51 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t27",
+    "title": "连接失败 3 次重试与重开凭据框",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "ConnectOutcome 状态机 + wpa_update_psk",
+    "criteria": "最多 3 次；已保存 PSK 只改口令；EAP 重开对话框",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t28",
+    "title": "断开无线菜单",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "Disconnect from %s + wpa_cli disconnect",
+    "criteria": "断开当前关联但保留已保存块",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t29",
+    "title": "配置窗口写盘后重启当前接口",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "service netif restart <nic>",
+    "criteria": "仅 --apply 成功后执行；只重启当前接口",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t30",
+    "title": "扫描后立即刷新菜单",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "UiRequest::Refresh",
+    "criteria": "点扫描后无需等 30 秒即可看到新结果",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t31",
+    "title": "配置窗口接口过滤与 Wi-Fi 凭据卡片",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "is_configurable_interface()；PSK/EAP/OPEN 表单",
+    "criteria": "_apply 写 daemon；EAP 含方法/身份/口令/内层/CA",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",

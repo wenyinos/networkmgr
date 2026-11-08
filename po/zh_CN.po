@@ -359,3 +359,9 @@ msgstr "域后缀："
 msgid "Enter the username and either the password or the TLS certificate paths."
 msgstr "请输入用户名，以及密码或 TLS 证书路径。"
 
+msgid "Wi-Fi Network"
+msgstr "Wi-Fi 网络"
+
+msgid "Saved"
+msgstr "已保存"
+

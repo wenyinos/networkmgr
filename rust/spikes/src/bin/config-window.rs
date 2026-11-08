@@ -220,7 +220,23 @@ struct ConfigWindow {
     commands: Vec<(String, String)>,
     resolv: Option<String>,
     status: String,
+    wifi_ssid: String,
+    wifi_security: WifiSecurity,
+    wifi_password: String,
+    eap_method: String,
+    eap_identity: String,
+    eap_password: String,
+    eap_phase2: String,
+    eap_ca: String,
+    wifi_status: String,
     runner: RealRunner,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum WifiSecurity {
+    Psk,
+    Eap,
+    Open,
 }
 
 impl Default for ConfigWindow {
@@ -250,6 +266,15 @@ impl Default for ConfigWindow {
             commands: Vec::new(),
             resolv: None,
             status: String::new(),
+            wifi_ssid: String::new(),
+            wifi_security: WifiSecurity::Psk,
+            wifi_password: String::new(),
+            eap_method: "PEAP".to_string(),
+            eap_identity: String::new(),
+            eap_password: String::new(),
+            eap_phase2: "MSCHAPV2".to_string(),
+            eap_ca: String::new(),
+            wifi_status: String::new(),
             runner: RealRunner::new(),
         }
     }
@@ -385,8 +410,57 @@ impl ConfigWindow {
                 return;
             }
         }
+        // 地址写进 rc.conf 后必须重启该接口才会生效；只重启当前接口，
+        // 避免把其他在线连接一起带掉。
+        if let Err(error) = sys.netif_restart(Some(&nic)) {
+            self.status = format!("FAILED netif restart {nic}: {error}");
+            return;
+        }
         self.status = networkmgr_core::tr!("Applied %s rc.conf entries")
             .replace("%s", &self.commands.len().to_string());
+    }
+
+    /// 把无线凭据写入 daemon 并保存；只有 `--apply` 才真的执行。
+    fn save_wifi(&mut self) {
+        self.wifi_status.clear();
+        let nic = self.interfaces[self.selected].clone();
+        if self.wifi_ssid.trim().is_empty() {
+            self.wifi_status = "FAILED: SSID is empty".to_string();
+            return;
+        }
+        if !self.apply_for_real {
+            self.wifi_status = networkmgr_core::tr!("Dry run (pass --apply to write):").to_string();
+            return;
+        }
+        let sys = Sys::new(&self.runner);
+        let result = match self.wifi_security {
+            WifiSecurity::Psk => {
+                sys.wpa_save_network(&nic, &self.wifi_ssid, "WPA2-PSK", Some(&self.wifi_password))
+            }
+            WifiSecurity::Open => sys.wpa_save_network(&nic, &self.wifi_ssid, "OPEN", None),
+            WifiSecurity::Eap => {
+                let eap = networkmgr_core::config::EapConfig {
+                    eap_method: Some(self.eap_method.clone()),
+                    identity: self.eap_identity.clone(),
+                    password: self.eap_password.clone(),
+                    phase2: Some(self.eap_phase2.clone()),
+                    ca_cert: self.eap_ca.clone(),
+                    ..Default::default()
+                };
+                sys.wpa_save_eap_network(&nic, &self.wifi_ssid, &eap)
+            }
+        };
+        let Some(id) = result else {
+            self.wifi_status = format!("FAILED {nic}: network block rejected");
+            return;
+        };
+        let selected = sys.wpa_select_network(&nic, &id);
+        let saved = sys.wpa_save_config(&nic);
+        self.wifi_status = if selected && saved {
+            format!("{} {}", networkmgr_core::tr!("Saved"), self.wifi_ssid)
+        } else {
+            format!("FAILED {nic}: select={selected} save={saved}")
+        };
     }
 
     fn check(&mut self, result: Result<String, String>) -> Option<String> {
@@ -522,6 +596,9 @@ impl ConfigWindow {
             }
         });
 
+        ui.add_space(12.0);
+        card(theme).show(ui, |ui| self.wifi_card(ui, theme));
+
         if !self.errors.is_empty() {
             ui.add_space(12.0);
             card(theme).show(ui, |ui| {
@@ -567,6 +644,118 @@ impl ConfigWindow {
             .is_some_and(|limit| self.started.elapsed() >= limit)
         {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+
+    /// Wi-Fi 凭据：PSK / EAP / 开放网络。默认 dry-run，`--apply` 才写 daemon。
+    fn wifi_card(&mut self, ui: &mut egui::Ui, theme: &Theme) {
+        section(ui, theme, networkmgr_core::tr!("Wi-Fi Network"));
+        ui.add_space(6.0);
+        field(ui, theme, "SSID", &mut self.wifi_ssid);
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if pill(ui, theme, "PSK", self.wifi_security == WifiSecurity::Psk).clicked() {
+                self.wifi_security = WifiSecurity::Psk;
+            }
+            if pill(ui, theme, "EAP", self.wifi_security == WifiSecurity::Eap).clicked() {
+                self.wifi_security = WifiSecurity::Eap;
+            }
+            if pill(ui, theme, "OPEN", self.wifi_security == WifiSecurity::Open).clicked() {
+                self.wifi_security = WifiSecurity::Open;
+            }
+        });
+        ui.add_space(6.0);
+        match self.wifi_security {
+            WifiSecurity::Psk => {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(networkmgr_core::tr!("Password:"))
+                            .size(13.0)
+                            .color(theme.text),
+                    );
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.wifi_password)
+                            .password(true)
+                            .desired_width(240.0),
+                    );
+                });
+            }
+            WifiSecurity::Eap => {
+                egui::Grid::new("eap")
+                    .num_columns(2)
+                    .spacing([18.0, 10.0])
+                    .show(ui, |ui| {
+                        ui.label(
+                            RichText::new(networkmgr_core::tr!("EAP Method:"))
+                                .size(13.0)
+                                .color(theme.text),
+                        );
+                        egui::ComboBox::from_id_salt("eap_method")
+                            .selected_text(&self.eap_method)
+                            .show_ui(ui, |ui| {
+                                for method in ["PEAP", "TTLS", "TLS"] {
+                                    ui.selectable_value(
+                                        &mut self.eap_method,
+                                        method.to_string(),
+                                        method,
+                                    );
+                                }
+                            });
+                        ui.end_row();
+                        field(
+                            ui,
+                            theme,
+                            networkmgr_core::tr!("Username:"),
+                            &mut self.eap_identity,
+                        );
+                        ui.label(
+                            RichText::new(networkmgr_core::tr!("Password:"))
+                                .size(13.0)
+                                .color(theme.text),
+                        );
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.eap_password)
+                                .password(true)
+                                .desired_width(240.0),
+                        );
+                        ui.end_row();
+                        ui.label(
+                            RichText::new(networkmgr_core::tr!("Inner Auth:"))
+                                .size(13.0)
+                                .color(theme.text),
+                        );
+                        egui::ComboBox::from_id_salt("eap_phase2")
+                            .selected_text(&self.eap_phase2)
+                            .show_ui(ui, |ui| {
+                                for method in ["MSCHAPV2", "MSCHAP", "PAP", "CHAP", "GTC", "TLS"] {
+                                    ui.selectable_value(
+                                        &mut self.eap_phase2,
+                                        method.to_string(),
+                                        method,
+                                    );
+                                }
+                            });
+                        ui.end_row();
+                        field(
+                            ui,
+                            theme,
+                            networkmgr_core::tr!("CA Certificate:"),
+                            &mut self.eap_ca,
+                        );
+                    });
+            }
+            WifiSecurity::Open => {}
+        }
+        ui.add_space(8.0);
+        if primary_button(ui, theme, networkmgr_core::tr!("Apply")).clicked() {
+            self.save_wifi();
+        }
+        if !self.wifi_status.is_empty() {
+            ui.label(
+                RichText::new(&self.wifi_status)
+                    .size(12.0)
+                    .color(theme.muted),
+            );
         }
     }
 }
@@ -725,6 +914,7 @@ fn main() -> eframe::Result<()> {
         .ifconfig_list()
         .split_whitespace()
         .map(str::to_string)
+        .filter(|name| networkmgr_core::ifconfig::is_configurable_interface(name))
         .collect();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

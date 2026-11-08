@@ -41,6 +41,8 @@ const REFRESH_SECONDS: u32 = 30;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// 动画帧间隔，与 Python 的 `GLib.timeout_add(300, ...)` 一致。
 const ANIMATION_MILLIS: u64 = 300;
+/// 连接失败后的总尝试次数，与 Python 的 `MAX_ATTEMPTS` 一致。
+const MAX_ATTEMPTS: u8 = 3;
 
 /// 连接尝试期间为 true；主线程据此循环播放信号格动画。
 static CONNECTING: AtomicBool = AtomicBool::new(false);
@@ -70,6 +72,7 @@ enum Action {
     Close,
     Scan(String),
     Configure(String),
+    Disconnect(String),
     Disable(String),
     Enable(String),
     Connect {
@@ -84,6 +87,29 @@ enum Action {
     },
     WgUp(String),
     WgDown(String),
+}
+
+/// 工作线程发回主线程的事件。
+enum UiRequest {
+    Action(Action),
+    ConnectOutcome(ConnectOutcome),
+    /// 要求主线程重建菜单与图标（扫描、断开、启用/禁用后）。
+    Refresh,
+}
+
+/// 一次连接尝试的结果；失败时带上足够的信息决定重试或清理。
+enum ConnectOutcome {
+    Connected {
+        ssid: String,
+    },
+    Failed {
+        ssid: String,
+        nic: String,
+        security: String,
+        saved: bool,
+        id: Option<String>,
+        attempt: u8,
+    },
 }
 
 /// 菜单点击之后要走哪条连接路径。
@@ -231,16 +257,36 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
                 &networkmgr_core::tr!("Configure %s").replace("%s", card),
                 Action::Configure(card.clone())
             );
+            if state.kind == Some("wifi") && state.connection == "Connected" {
+                if let Some(ssid) = &state.ssid {
+                    add!(
+                        menu,
+                        &networkmgr_core::tr!("Disconnect from %s").replace("%s", ssid),
+                        Action::Disconnect(card.clone())
+                    );
+                }
+            }
         }
         let _ = menu.append(&PredefinedMenuItem::separator());
     }
 
     let nic = state.card.clone().unwrap_or_default();
+    // 已保存网络也带上扫描结果里的安全类型，失败时才知道该重开哪种对话框。
+    let scan_security: HashMap<&str, &str> = snapshot
+        .scans
+        .iter()
+        .map(|scan| (scan.ssid.as_str(), scan.security))
+        .collect();
 
     if !snapshot.saved.is_empty() {
         let submenu = Submenu::new(networkmgr_core::tr!("Saved Networks"), true);
         for network in &snapshot.saved {
             let label = format!("{} {}", network.ssid, network.flags);
+            let security = scan_security
+                .get(network.ssid.as_str())
+                .copied()
+                .unwrap_or_default()
+                .to_string();
             add!(
                 submenu,
                 &label,
@@ -248,7 +294,7 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
                     ssid: network.ssid.clone(),
                     nic: nic.clone(),
                     saved_id: Some(network.id.clone()),
-                    security: String::new(),
+                    security,
                 }
             );
         }
@@ -320,7 +366,7 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
 }
 
 /// 主线程上的动作分发：需要对话框的动作在这里弹窗，阻塞命令交给工作线程。
-fn dispatch(action: Action) {
+fn dispatch(action: Action, tx: &mpsc::Sender<UiRequest>) {
     match action {
         Action::Close => std::process::exit(0),
         Action::Restart(card) => {
@@ -343,19 +389,39 @@ fn dispatch(action: Action) {
             security,
         } => match connect_plan(&security, saved_id) {
             ConnectPlan::Saved(id) => {
-                thread::spawn(move || connect_saved(&nic, &ssid, &id));
+                let tx = tx.clone();
+                thread::spawn(move || {
+                    let runner = RealRunner::new();
+                    let sys = Sys::new(&runner);
+                    connect_saved(&sys, &nic, &ssid, &id, &security, 0, tx);
+                });
             }
             ConnectPlan::Open => {
-                thread::spawn(move || connect_new(&nic, &ssid, "OPEN", None));
+                let tx = tx.clone();
+                thread::spawn(move || {
+                    let runner = RealRunner::new();
+                    let sys = Sys::new(&runner);
+                    connect_new(&sys, &nic, &ssid, "OPEN", None, 0, tx);
+                });
             }
             ConnectPlan::Password => {
                 if let Some(psk) = ask_password(&ssid) {
-                    thread::spawn(move || connect_new(&nic, &ssid, &security, Some(&psk)));
+                    let tx = tx.clone();
+                    thread::spawn(move || {
+                        let runner = RealRunner::new();
+                        let sys = Sys::new(&runner);
+                        connect_new(&sys, &nic, &ssid, &security, Some(&psk), 0, tx);
+                    });
                 }
             }
             ConnectPlan::Eap => {
                 if let Some(eap) = ask_eap_credentials(&ssid) {
-                    thread::spawn(move || connect_eap(&nic, &ssid, eap));
+                    let tx = tx.clone();
+                    thread::spawn(move || {
+                        let runner = RealRunner::new();
+                        let sys = Sys::new(&runner);
+                        connect_eap(&sys, &nic, &ssid, eap, 0, tx);
+                    });
                 }
             }
             ConnectPlan::Unsupported => {
@@ -369,11 +435,32 @@ fn dispatch(action: Action) {
                 );
             }
         },
+        Action::Disconnect(nic) => {
+            let tx = tx.clone();
+            thread::spawn(move || {
+                let runner = RealRunner::new();
+                let sys = Sys::new(&runner);
+                if sys.wpa_disconnect(&nic) {
+                    println!("networkmgr: disconnected {nic}");
+                } else {
+                    eprintln!("networkmgr: disconnect failed on {nic}");
+                }
+                let _ = tx.send(UiRequest::Refresh);
+            });
+        }
         Action::Forget { ssid, nic } => {
-            thread::spawn(move || forget_network(&nic, &ssid));
+            let tx = tx.clone();
+            thread::spawn(move || {
+                forget_network(&nic, &ssid);
+                let _ = tx.send(UiRequest::Refresh);
+            });
         }
         other => {
-            thread::spawn(move || execute(other));
+            let tx = tx.clone();
+            thread::spawn(move || {
+                execute(other);
+                let _ = tx.send(UiRequest::Refresh);
+            });
         }
     }
 }
@@ -437,63 +524,241 @@ fn execute(action: Action) {
     }
 }
 
-fn connect_saved(nic: &str, ssid: &str, id: &str) {
+fn send_outcome(tx: &mpsc::Sender<UiRequest>, outcome: ConnectOutcome) {
+    let _ = tx.send(UiRequest::ConnectOutcome(outcome));
+}
+
+fn failed(
+    ssid: &str,
+    nic: &str,
+    security: &str,
+    saved: bool,
+    id: Option<String>,
+    attempt: u8,
+) -> ConnectOutcome {
+    ConnectOutcome::Failed {
+        ssid: ssid.to_string(),
+        nic: nic.to_string(),
+        security: security.to_string(),
+        saved,
+        id,
+        attempt,
+    }
+}
+
+fn connect_saved(
+    sys: &Sys<'_, RealRunner>,
+    nic: &str,
+    ssid: &str,
+    id: &str,
+    security: &str,
+    attempt: u8,
+    tx: mpsc::Sender<UiRequest>,
+) {
     let _guard = ConnectingGuard::start();
-    let runner = RealRunner::new();
-    let sys = Sys::new(&runner);
     if !sys.wpa_select_network(nic, id) {
-        eprintln!("networkmgr: {ssid} could not be selected");
+        send_outcome(
+            &tx,
+            failed(ssid, nic, security, true, Some(id.into()), attempt),
+        );
         return;
     }
-    finish_connection(&sys, nic, ssid, true, id);
-}
-
-fn connect_new(nic: &str, ssid: &str, security: &str, psk: Option<&str>) {
-    let _guard = ConnectingGuard::start();
-    let runner = RealRunner::new();
-    let sys = Sys::new(&runner);
-    let Some(id) = sys.wpa_save_network(nic, ssid, security, psk) else {
-        eprintln!("networkmgr: could not create a network block for {ssid}");
-        return;
-    };
-    if !sys.wpa_select_network(nic, &id) {
-        sys.wpa_remove_network(nic, &id);
-        eprintln!("networkmgr: {ssid} could not be selected");
-        return;
-    }
-    finish_connection(&sys, nic, ssid, false, &id);
-}
-
-fn connect_eap(nic: &str, ssid: &str, eap: config::EapConfig) {
-    let _guard = ConnectingGuard::start();
-    let runner = RealRunner::new();
-    let sys = Sys::new(&runner);
-    let Some(id) = sys.wpa_save_eap_network(nic, ssid, &eap) else {
-        eprintln!("networkmgr: could not create an enterprise block for {ssid}");
-        return;
-    };
-    if !sys.wpa_select_network(nic, &id) {
-        sys.wpa_remove_network(nic, &id);
-        eprintln!("networkmgr: {ssid} could not be selected");
-        return;
-    }
-    finish_connection(&sys, nic, ssid, false, &id);
-}
-
-fn finish_connection(sys: &Sys<'_, RealRunner>, nic: &str, ssid: &str, saved: bool, id: &str) {
-    if sys.wpa_wait_for_connection(nic, ssid, CONNECT_TIMEOUT) {
-        // 连上才写盘：错口令永远不会落进 wpa_supplicant.conf。
+    let connected = sys.wpa_wait_for_connection(nic, ssid, CONNECT_TIMEOUT);
+    if connected {
         let _ = sys.wpa_save_config(nic);
-        println!("networkmgr: connected to {ssid}");
-    } else if saved {
-        eprintln!("networkmgr: could not connect to {ssid}; saved block kept");
-    } else {
-        // 新建的块没连上就删掉，避免留下一个永远连不上的配置。
-        sys.wpa_remove_network(nic, id);
-        eprintln!("networkmgr: could not connect to {ssid}; block removed");
     }
-    // select_network 禁用了其他网络，结束时必须恢复。
     let _ = sys.wpa_enable_all(nic);
+    send_outcome(
+        &tx,
+        if connected {
+            ConnectOutcome::Connected {
+                ssid: ssid.to_string(),
+            }
+        } else {
+            failed(ssid, nic, security, true, Some(id.into()), attempt)
+        },
+    );
+}
+
+fn connect_new(
+    sys: &Sys<'_, RealRunner>,
+    nic: &str,
+    ssid: &str,
+    security: &str,
+    psk: Option<&str>,
+    attempt: u8,
+    tx: mpsc::Sender<UiRequest>,
+) {
+    let _guard = ConnectingGuard::start();
+    let Some(id) = sys.wpa_save_network(nic, ssid, security, psk) else {
+        send_outcome(&tx, failed(ssid, nic, security, false, None, attempt));
+        return;
+    };
+    if !sys.wpa_select_network(nic, &id) {
+        send_outcome(&tx, failed(ssid, nic, security, false, Some(id), attempt));
+        return;
+    }
+    let connected = sys.wpa_wait_for_connection(nic, ssid, CONNECT_TIMEOUT);
+    if connected {
+        let _ = sys.wpa_save_config(nic);
+    }
+    let _ = sys.wpa_enable_all(nic);
+    send_outcome(
+        &tx,
+        if connected {
+            ConnectOutcome::Connected {
+                ssid: ssid.to_string(),
+            }
+        } else {
+            failed(ssid, nic, security, false, Some(id), attempt)
+        },
+    );
+}
+
+fn connect_eap(
+    sys: &Sys<'_, RealRunner>,
+    nic: &str,
+    ssid: &str,
+    eap: config::EapConfig,
+    attempt: u8,
+    tx: mpsc::Sender<UiRequest>,
+) {
+    let _guard = ConnectingGuard::start();
+    let Some(id) = sys.wpa_save_eap_network(nic, ssid, &eap) else {
+        send_outcome(&tx, failed(ssid, nic, "WPA2-EAP", false, None, attempt));
+        return;
+    };
+    if !sys.wpa_select_network(nic, &id) {
+        send_outcome(&tx, failed(ssid, nic, "WPA2-EAP", false, Some(id), attempt));
+        return;
+    }
+    let connected = sys.wpa_wait_for_connection(nic, ssid, CONNECT_TIMEOUT);
+    if connected {
+        let _ = sys.wpa_save_config(nic);
+    }
+    let _ = sys.wpa_enable_all(nic);
+    send_outcome(
+        &tx,
+        if connected {
+            ConnectOutcome::Connected {
+                ssid: ssid.to_string(),
+            }
+        } else {
+            failed(ssid, nic, "WPA2-EAP", false, Some(id), attempt)
+        },
+    );
+}
+
+/// 已保存网络的密码重试：只改 psk，保留块里的其他字段。
+fn connect_update_psk(
+    sys: &Sys<'_, RealRunner>,
+    nic: &str,
+    ssid: &str,
+    id: &str,
+    psk: &str,
+    attempt: u8,
+    tx: mpsc::Sender<UiRequest>,
+) {
+    let _guard = ConnectingGuard::start();
+    let updated = sys.wpa_update_psk(nic, id, psk)
+        && sys.wpa_enable_network(nic, id)
+        && sys.wpa_select_network(nic, id);
+    if !updated {
+        send_outcome(
+            &tx,
+            failed(ssid, nic, "WPA2-PSK", true, Some(id.into()), attempt),
+        );
+        return;
+    }
+    let connected = sys.wpa_wait_for_connection(nic, ssid, CONNECT_TIMEOUT);
+    if connected {
+        let _ = sys.wpa_save_config(nic);
+    }
+    let _ = sys.wpa_enable_all(nic);
+    send_outcome(
+        &tx,
+        if connected {
+            ConnectOutcome::Connected {
+                ssid: ssid.to_string(),
+            }
+        } else {
+            failed(ssid, nic, "WPA2-PSK", true, Some(id.into()), attempt)
+        },
+    );
+}
+
+/// 主线程：失败后按 Python 的策略重开对话框，最多 3 次。
+fn handle_connect_outcome(
+    outcome: ConnectOutcome,
+    tx: &mpsc::Sender<UiRequest>,
+    refresh: &dyn Fn(),
+) {
+    match outcome {
+        ConnectOutcome::Connected { ssid } => {
+            println!("networkmgr: connected to {ssid}");
+            refresh();
+        }
+        ConnectOutcome::Failed {
+            ssid,
+            nic,
+            security,
+            saved,
+            id,
+            attempt,
+        } => {
+            let next = attempt + 1;
+            let retryable = next < MAX_ATTEMPTS;
+            if retryable && security.ends_with("-EAP") {
+                if let Some(eap) = ask_eap_credentials(&ssid) {
+                    let tx = tx.clone();
+                    thread::spawn(move || {
+                        let runner = RealRunner::new();
+                        let sys = Sys::new(&runner);
+                        let _ = sys.wpa_remove_by_ssid(&nic, &ssid);
+                        let _ = sys.wpa_reconfigure(&nic);
+                        connect_eap(&sys, &nic, &ssid, eap, next, tx);
+                    });
+                    return;
+                }
+            } else if retryable
+                && matches!(
+                    security.as_str(),
+                    "WPA2-PSK" | "WPA-PSK" | "WPA3-SAE" | "WEP"
+                )
+            {
+                if let Some(psk) = ask_password(&ssid) {
+                    let tx = tx.clone();
+                    let saved_id = id.clone();
+                    thread::spawn(move || {
+                        let runner = RealRunner::new();
+                        let sys = Sys::new(&runner);
+                        if saved {
+                            if let Some(id) = saved_id {
+                                connect_update_psk(&sys, &nic, &ssid, &id, &psk, next, tx);
+                                return;
+                            }
+                        }
+                        let _ = sys.wpa_remove_by_ssid(&nic, &ssid);
+                        connect_new(&sys, &nic, &ssid, &security, Some(&psk), next, tx);
+                    });
+                    return;
+                }
+            }
+            // 放弃：新建块删除，已保存块保留。
+            if !saved {
+                if let Some(id) = &id {
+                    let runner = RealRunner::new();
+                    let sys = Sys::new(&runner);
+                    let _ = sys.wpa_remove_network(&nic, id);
+                }
+            }
+            show_message(
+                &networkmgr_core::tr!("Could not connect to %s").replace("%s", &ssid),
+                &networkmgr_core::tr!("Could not connect to %s. Try again.").replace("%s", &ssid),
+            );
+            refresh();
+        }
+    }
 }
 
 fn forget_network(nic: &str, ssid: &str) {
@@ -786,28 +1051,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         snapshot.state.to_json()
     );
 
-    // 30 秒被动刷新：菜单与图标只能在主线程重建。
+    // 工作线程 → 主线程的事件通道；菜单事件也走这里。
+    let (tx, rx) = mpsc::channel::<UiRequest>();
+
+    // 菜单重建是主线程职责：定时刷新与动作完成后的即时刷新共用同一段逻辑。
     #[cfg(feature = "appindicator")]
     {
         let latest = Rc::new(RefCell::new(snapshot.state.clone()));
-        let tray_timer = Rc::clone(&tray);
-        let actions_timer = Arc::clone(&actions);
-        let latest_timer = Rc::clone(&latest);
+        let refresh: Rc<dyn Fn()> = {
+            let tray_refresh = Rc::clone(&tray);
+            let actions_refresh = Arc::clone(&actions);
+            let latest_refresh = Rc::clone(&latest);
+            Rc::new(move || {
+                let snapshot = gather();
+                let (menu, map) = build_menu(&snapshot);
+                *actions_refresh.lock().expect("actions lock") = map;
+                *latest_refresh.borrow_mut() = snapshot.state.clone();
+                let tray = tray_refresh.borrow();
+                let _ = tray.set_tooltip(Some(&snapshot.state.tooltip));
+                // 连接动画期间不要用静态图标覆盖动画帧。
+                if !CONNECTING.load(Ordering::Relaxed) {
+                    let _ = tray.set_icon(Some(icon_for(
+                        snapshot.state.signal,
+                        snapshot.state.kind == Some("wifi"),
+                    )));
+                }
+                tray.set_menu(Some(Box::new(menu)));
+            })
+        };
+
+        let refresh_timer = Rc::clone(&refresh);
         gtk::glib::timeout_add_seconds_local(REFRESH_SECONDS, move || {
-            let snapshot = gather();
-            let (menu, map) = build_menu(&snapshot);
-            *actions_timer.lock().expect("actions lock") = map;
-            *latest_timer.borrow_mut() = snapshot.state.clone();
-            let tray = tray_timer.borrow();
-            let _ = tray.set_tooltip(Some(&snapshot.state.tooltip));
-            // 连接动画期间不要用静态图标覆盖动画帧。
-            if !CONNECTING.load(Ordering::Relaxed) {
-                let _ = tray.set_icon(Some(icon_for(
-                    snapshot.state.signal,
-                    snapshot.state.kind == Some("wifi"),
-                )));
-            }
-            tray.set_menu(Some(Box::new(menu)));
+            refresh_timer();
             gtk::glib::ControlFlow::Continue
         });
 
@@ -829,6 +1104,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             gtk::glib::ControlFlow::Continue
         });
+
+        let refresh_channel = Rc::clone(&refresh);
+        let tx_channel = tx.clone();
+        gtk::glib::timeout_add_local(Duration::from_millis(100), move || {
+            while let Ok(request) = rx.try_recv() {
+                match request {
+                    UiRequest::Action(action) => dispatch(action, &tx_channel),
+                    UiRequest::ConnectOutcome(outcome) => {
+                        handle_connect_outcome(outcome, &tx_channel, refresh_channel.as_ref());
+                    }
+                    UiRequest::Refresh => refresh_channel(),
+                }
+            }
+            gtk::glib::ControlFlow::Continue
+        });
+        gtk::main();
     }
 
     let seconds = std::env::var("SPIKE_SECONDS")
@@ -838,10 +1129,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(seconds);
 
     // 菜单事件线程只转发动作；对话框和命令分发都回到主线程。
-    let (action_tx, action_rx) = mpsc::channel::<Action>();
     let menu_rx = MenuEvent::receiver();
     let icon_rx = TrayIconEvent::receiver();
     let actions_events = Arc::clone(&actions);
+    let tx_events = tx.clone();
     thread::spawn(move || loop {
         if let Ok(event) = menu_rx.try_recv() {
             let action = actions_events
@@ -851,7 +1142,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .cloned();
             match action {
                 Some(action) => {
-                    let _ = action_tx.send(action);
+                    let _ = tx_events.send(UiRequest::Action(action));
                 }
                 None => println!("networkmgr: unknown menu id {:?}", event.id),
             }
@@ -866,21 +1157,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         thread::sleep(Duration::from_millis(50));
     });
 
-    #[cfg(feature = "appindicator")]
-    {
-        gtk::glib::timeout_add_local(Duration::from_millis(100), move || {
-            while let Ok(action) = action_rx.try_recv() {
-                dispatch(action);
-            }
-            gtk::glib::ControlFlow::Continue
-        });
-        gtk::main();
-    }
-
     #[cfg(not(feature = "appindicator"))]
     loop {
-        while let Ok(action) = action_rx.try_recv() {
-            dispatch(action);
+        while let Ok(request) = rx.try_recv() {
+            if let UiRequest::Action(action) = request {
+                dispatch(action, &tx);
+            }
         }
         thread::sleep(Duration::from_millis(200));
     }
