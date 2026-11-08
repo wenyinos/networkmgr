@@ -951,7 +951,7 @@ fn ask_hidden_network() -> Option<(String, Option<String>)> {
     grid.attach(&open, 1, 2, 1, 1);
     let password_toggle = password.clone();
     open.connect_toggled(move |check| {
-        password_toggle.set_sensitive(!check.active());
+        password_toggle.set_sensitive(!check.is_active());
     });
 
     dialog.content_area().add(&grid);
@@ -959,7 +959,7 @@ fn ask_hidden_network() -> Option<(String, Option<String>)> {
     let response = dialog.run();
     let ssid_text = ssid.text().to_string();
     let password_text = password.text().to_string();
-    let is_open = open.active();
+    let is_open = open.is_active();
     dialog.close();
 
     if response != gtk::ResponseType::Ok || ssid_text.is_empty() {
