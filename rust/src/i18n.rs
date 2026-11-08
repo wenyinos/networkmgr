@@ -149,6 +149,66 @@ pub fn translate_or<'a>(msgid: &'a str, catalog: Option<&'a Catalog>) -> &'a str
     }
 }
 
+/// 覆盖 `.mo` 安装根目录，格式仍是 `<dir>/<lang>/LC_MESSAGES/NetworkMgr.mo`。
+///
+/// 用于未安装的运行、测试和截图；正常安装时不需要设置。
+pub const LOCALE_DIR_ENV: &str = "NETWORKMGR_LOCALE_DIR";
+
+/// 直接指定一份 `.mo`，优先于 [`LOCALE_DIR_ENV`]。
+pub const MO_ENV: &str = "NETWORKMGR_MO";
+
+/// 进程级翻译目录，首次 [`init`] 时加载。
+static CATALOG: std::sync::OnceLock<Option<Catalog>> = std::sync::OnceLock::new();
+
+/// 按 `LC_ALL` / `LC_MESSAGES` / `LANG` 的顺序选择语言并加载翻译。
+///
+/// 必须在任何 `tr!` 之前调用一次。重复调用是幂等的：`OnceLock` 保证
+/// 多线程下只加载一次，后一次不会覆盖前一次的结果。找不到 `.mo` 时
+/// 保持 `None`，所有消息回退到原文——翻译缺失不能阻止程序启动。
+pub fn init() {
+    CATALOG.get_or_init(load_from_env);
+}
+
+/// 翻译一条消息；未初始化或没有译文时返回原文。
+///
+/// 参数必须是 `'static` 字面量，因为返回的引用可能直接指向翻译表。
+/// 动态内容用 gettext 的 `%s` 模板：`tr!("Configure %s").replace("%s", card)`。
+pub fn tr(msgid: &'static str) -> &'static str {
+    match CATALOG.get().and_then(Option::as_ref) {
+        Some(catalog) => catalog.translate(msgid),
+        None => msgid,
+    }
+}
+
+fn load_from_env() -> Option<Catalog> {
+    if let Some(path) = std::env::var_os(MO_ENV) {
+        let bytes = fs::read(path).ok()?;
+        return Catalog::parse(&bytes).ok();
+    }
+    let raw = ["LC_ALL", "LC_MESSAGES", "LANG"]
+        .iter()
+        .filter_map(|key| std::env::var(key).ok())
+        .find(|value| !value.trim().is_empty());
+    let lang = detect_lang(raw.as_deref())?;
+    let dir = std::env::var_os(LOCALE_DIR_ENV)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_LOCALE_DIR));
+    load(&dir, &lang)
+}
+
+/// 翻译字面量消息，等价于 Python 的 `_()`。
+///
+/// ```ignore
+/// use networkmgr_core::tr;
+/// let label = tr!("Restart Networking");
+/// ```
+#[macro_export]
+macro_rules! tr {
+    ($msgid:expr) => {
+        $crate::i18n::tr($msgid)
+    };
+}
+
 fn read_array(bytes: &[u8], offset: usize) -> Result<[u8; 4], MoError> {
     let slice = bytes.get(offset..offset + 4).ok_or(MoError::Truncated)?;
     let mut array = [0u8; 4];
@@ -294,6 +354,28 @@ mod tests {
             translate_or("Forget Network", catalog.as_ref()),
             "Forget Network"
         );
+    }
+
+    #[test]
+    fn translated_macro_falls_back_to_the_literal() {
+        // 目录未初始化或没有这一条时，必须原样返回，不能 panic 或给出空串。
+        assert_eq!(crate::tr!("Not In Any Catalog"), "Not In Any Catalog");
+    }
+
+    /// 全局入口的端到端校验：设置 `NETWORKMGR_MO` 后 `tr!` 必须返回译文。
+    ///
+    /// 平时跳过；验证时：
+    ///   msgfmt po/zh_CN.po -o /tmp/zh_CN.mo
+    ///   NETWORKMGR_MO=/tmp/zh_CN.mo cargo test global_translation
+    #[test]
+    fn global_translation_reads_the_environment_catalog() {
+        if std::env::var_os(MO_ENV).is_none() {
+            return;
+        }
+        init();
+        assert_eq!(tr("Restart Networking"), "重启网络");
+        assert_eq!(tr("Close Network Manager"), "退出网络管理器");
+        assert_eq!(tr("Not In Any Catalog"), "Not In Any Catalog");
     }
 
     /// 用 `NETWORKMGR_MO=<path>` 指向真实编译出的 .mo 做端到端校验。

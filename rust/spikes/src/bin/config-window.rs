@@ -385,7 +385,8 @@ impl ConfigWindow {
                 return;
             }
         }
-        self.status = format!("Applied {} rc.conf entries", self.commands.len());
+        self.status = networkmgr_core::tr!("Applied %s rc.conf entries")
+            .replace("%s", &self.commands.len().to_string());
     }
 
     fn check(&mut self, result: Result<String, String>) -> Option<String> {
@@ -404,23 +405,25 @@ impl ConfigWindow {
             ui.label(RichText::new("Wi-Fi").size(22.0).strong().color(theme.text));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if self.apply_for_real {
-                    if primary_button(ui, theme, "Apply").clicked() {
+                    if primary_button(ui, theme, networkmgr_core::tr!("Apply")).clicked() {
                         self.apply();
                     }
-                } else if secondary_button(ui, theme, "Preview").clicked() {
+                } else if secondary_button(ui, theme, networkmgr_core::tr!("Preview")).clicked() {
                     self.apply();
                 }
             });
         });
         ui.label(
-            RichText::new("Pick an interface, then choose how it gets its address.")
-                .size(12.0)
-                .color(theme.muted),
+            RichText::new(networkmgr_core::tr!(
+                "Pick an interface, then choose how it gets its address."
+            ))
+            .size(12.0)
+            .color(theme.muted),
         );
         ui.add_space(12.0);
 
         card(theme).show(ui, |ui| {
-            section(ui, theme, "Interface");
+            section(ui, theme, networkmgr_core::tr!("Interface"));
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let current = self.interfaces[self.selected].clone();
@@ -451,7 +454,9 @@ impl ConfigWindow {
                     if pill(ui, theme, "DHCP", self.method4 == Method4::Dhcp).clicked() {
                         self.method4 = Method4::Dhcp;
                     }
-                    if pill(ui, theme, "Manual", self.method4 == Method4::Manual).clicked() {
+                    if pill(ui, theme, networkmgr_core::tr!("Manual"), self.method4 == Method4::Manual)
+                        .clicked()
+                    {
                         self.method4 = Method4::Manual;
                     }
                 });
@@ -461,12 +466,17 @@ impl ConfigWindow {
                         .num_columns(2)
                         .spacing([18.0, 10.0])
                         .show(ui, |ui| {
-                            field(ui, theme, "IP address", &mut self.ip);
-                            field(ui, theme, "Subnet mask", &mut self.netmask);
-                            field(ui, theme, "Default gateway", &mut self.gateway);
-                            field(ui, theme, "DNS server 1", &mut self.dns1);
-                            field(ui, theme, "DNS server 2", &mut self.dns2);
-                            field(ui, theme, "Search domain", &mut self.search);
+                            field(ui, theme, networkmgr_core::tr!("IP address"), &mut self.ip);
+                            field(ui, theme, networkmgr_core::tr!("Subnet mask"), &mut self.netmask);
+                            field(
+                                ui,
+                                theme,
+                                networkmgr_core::tr!("Default gateway"),
+                                &mut self.gateway,
+                            );
+                            field(ui, theme, networkmgr_core::tr!("DNS server 1"), &mut self.dns1);
+                            field(ui, theme, networkmgr_core::tr!("DNS server 2"), &mut self.dns2);
+                            field(ui, theme, networkmgr_core::tr!("Search domain"), &mut self.search);
                         });
                 }
             }
@@ -477,7 +487,9 @@ impl ConfigWindow {
                     if pill(ui, theme, "SLAAC", self.method6 == Method6::Slaac).clicked() {
                         self.method6 = Method6::Slaac;
                     }
-                    if pill(ui, theme, "Manual", self.method6 == Method6::Manual).clicked() {
+                    if pill(ui, theme, networkmgr_core::tr!("Manual"), self.method6 == Method6::Manual)
+                        .clicked()
+                    {
                         self.method6 = Method6::Manual;
                     }
                 });
@@ -487,9 +499,14 @@ impl ConfigWindow {
                         .num_columns(2)
                         .spacing([18.0, 10.0])
                         .show(ui, |ui| {
-                            field(ui, theme, "IPv6 address", &mut self.ip6);
-                            field(ui, theme, "Prefix length", &mut self.prefix6);
-                            field(ui, theme, "Default gateway", &mut self.gateway6);
+                            field(ui, theme, networkmgr_core::tr!("IPv6 address"), &mut self.ip6);
+                            field(ui, theme, networkmgr_core::tr!("Prefix length"), &mut self.prefix6);
+                            field(
+                                ui,
+                                theme,
+                                networkmgr_core::tr!("Default gateway"),
+                                &mut self.gateway6,
+                            );
                         });
                 }
             }
@@ -498,7 +515,7 @@ impl ConfigWindow {
         if !self.errors.is_empty() {
             ui.add_space(12.0);
             card(theme).show(ui, |ui| {
-                section(ui, theme, "Validation");
+                section(ui, theme, networkmgr_core::tr!("Validation"));
                 ui.add_space(4.0);
                 for error in &self.errors {
                     ui.label(RichText::new(error).color(theme.destructive).size(12.0));
@@ -509,13 +526,13 @@ impl ConfigWindow {
         if !self.preview.is_empty() {
             ui.add_space(12.0);
             card(theme).show(ui, |ui| {
-                section(ui, theme, "Preview");
+                section(ui, theme, networkmgr_core::tr!("Preview"));
                 ui.add_space(4.0);
                 ui.label(
                     RichText::new(if self.apply_for_real {
-                        "Will write:"
+                        networkmgr_core::tr!("Will write:")
                     } else {
-                        "Dry run (pass --apply to write):"
+                        networkmgr_core::tr!("Dry run (pass --apply to write):")
                     })
                     .size(11.0)
                     .color(theme.muted),
@@ -570,7 +587,7 @@ impl ConfigWindow {
                 .color(theme.text),
         );
         ui.label(
-            RichText::new("System network configuration")
+            RichText::new(networkmgr_core::tr!("System network configuration"))
                 .size(11.0)
                 .color(theme.muted),
         );
@@ -580,7 +597,7 @@ impl ConfigWindow {
             self.nav = Nav::Wifi;
         }
         ui.add_space(4.0);
-        if nav_item(ui, theme, "🖥", "Desktop", self.nav == Nav::Desktop) {
+        if nav_item(ui, theme, "🖥", networkmgr_core::tr!("Desktop"), self.nav == Nav::Desktop) {
             self.nav = Nav::Desktop;
         }
         ui.add_space(4.0);
@@ -588,19 +605,23 @@ impl ConfigWindow {
             ui,
             theme,
             "🧩",
-            "OS Upgrade & Recovery",
+            networkmgr_core::tr!("OS Upgrade & Recovery"),
             self.nav == Nav::Upgrade,
         ) {
             self.nav = Nav::Upgrade;
         }
 
         ui.add_space(18.0);
-        ui.label(RichText::new("Theme").size(12.0).color(theme.muted));
+        ui.label(
+            RichText::new(networkmgr_core::tr!("Theme"))
+                .size(12.0)
+                .color(theme.muted),
+        );
         ui.horizontal(|ui| {
-            if pill(ui, theme, "Light", !self.dark).clicked() {
+            if pill(ui, theme, networkmgr_core::tr!("Light"), !self.dark).clicked() {
                 self.dark = false;
             }
-            if pill(ui, theme, "Dark", self.dark).clicked() {
+            if pill(ui, theme, networkmgr_core::tr!("Dark"), self.dark).clicked() {
                 self.dark = true;
             }
         });
@@ -636,14 +657,16 @@ impl eframe::App for ConfigWindow {
                     Nav::Desktop => placeholder(
                         ui,
                         &theme,
-                        "Desktop",
-                        "Desktop settings arrive with stage 3.",
+                        networkmgr_core::tr!("Desktop"),
+                        networkmgr_core::tr!("Desktop settings arrive with stage 3."),
                     ),
                     Nav::Upgrade => placeholder(
                         ui,
                         &theme,
-                        "OS Upgrade & Recovery",
-                        "Not part of NetworkMgr; kept to match the reference layout.",
+                        networkmgr_core::tr!("OS Upgrade & Recovery"),
+                        networkmgr_core::tr!(
+                            "Not part of NetworkMgr; kept to match the reference layout."
+                        ),
                     ),
                 });
             },
@@ -652,6 +675,7 @@ impl eframe::App for ConfigWindow {
 }
 
 fn main() -> eframe::Result<()> {
+    networkmgr_core::i18n::init();
     let limit = std::env::var("SPIKE_SECONDS")
         .ok()
         .and_then(|raw| raw.parse::<u64>().ok())
@@ -664,7 +688,7 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([900.0, 640.0])
-            .with_title("NetworkMgr configuration"),
+            .with_title(networkmgr_core::tr!("NetworkMgr configuration")),
         renderer: eframe::Renderer::Glow,
         ..Default::default()
     };

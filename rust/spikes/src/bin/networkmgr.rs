@@ -147,30 +147,44 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
     }
 
     let state = &snapshot.state;
+    let wireless = state.kind == Some("wifi");
     let headline = match (&state.card, state.connection) {
-        (None, _) => "Network card is not enabled".to_string(),
+        (None, _) => networkmgr_core::tr!("Network card is not enabled").to_string(),
         (Some(card), "Connected") => match &state.ssid {
             Some(ssid) => format!("{ssid} ({card})"),
-            None => format!("Wired {card} Connected"),
+            None if wireless => networkmgr_core::tr!("WiFi %s Connected").replace("%s", card),
+            None => networkmgr_core::tr!("Wired %s Connected").replace("%s", card),
         },
-        (Some(card), other) => format!("{card} {other}"),
+        (Some(card), "Disabled") if wireless => {
+            networkmgr_core::tr!("WiFi %s Disabled").replace("%s", card)
+        }
+        (Some(card), "Disabled") => {
+            networkmgr_core::tr!("Wired %s Disabled").replace("%s", card)
+        }
+        (Some(card), "Unplug") => networkmgr_core::tr!("Wired %s Unplug").replace("%s", card),
+        (Some(card), "Disconnected") if wireless => {
+            networkmgr_core::tr!("WiFi %s Disconnected").replace("%s", card)
+        }
+        (Some(card), _) => {
+            networkmgr_core::tr!("Wired %s Disconnected").replace("%s", card)
+        }
     };
     title!(menu, &headline);
     let _ = menu.append(&PredefinedMenuItem::separator());
 
     if !snapshot.tunnels.configs.is_empty() {
-        title!(menu, "WireGuard");
+        title!(menu, networkmgr_core::tr!("WireGuard VPN"));
         for (device, config) in &snapshot.tunnels.configs {
             if config.state == "Connected" {
                 add!(
                     menu,
-                    &format!("Disable {}", config.info),
+                    &networkmgr_core::tr!("Disable %s").replace("%s", &config.info),
                     Action::WgDown(device.clone())
                 );
             } else {
                 add!(
                     menu,
-                    &format!("Enable {}", config.info),
+                    &format!("{} {}", networkmgr_core::tr!("Enable"), config.info),
                     Action::WgUp(device.clone())
                 );
             }
@@ -180,16 +194,16 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
 
     if let Some(card) = &state.card {
         if state.connection == "Disabled" {
-            add!(menu, "Enable", Action::Enable(card.clone()));
+            add!(menu, networkmgr_core::tr!("Enable"), Action::Enable(card.clone()));
         } else {
             add!(
                 menu,
-                &format!("Disable {card}"),
+                &networkmgr_core::tr!("Disable %s").replace("%s", card),
                 Action::Disable(card.clone())
             );
             add!(
                 menu,
-                &format!("Configure {card}"),
+                &networkmgr_core::tr!("Configure %s").replace("%s", card),
                 Action::Configure(card.clone())
             );
         }
@@ -199,7 +213,7 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
     let nic = state.card.clone().unwrap_or_default();
 
     if !snapshot.saved.is_empty() {
-        let submenu = Submenu::new("Saved Networks", true);
+        let submenu = Submenu::new(networkmgr_core::tr!("Saved Networks"), true);
         for network in &snapshot.saved {
             let label = format!("{} {}", network.ssid, network.flags);
             add!(
@@ -217,7 +231,7 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
 
         // 已保存的网络即使不在扫描范围内也要能删除，否则一个错口令的块
         // 会永远留在 wpa_supplicant.conf 里。
-        let forget = Submenu::new("Forget Network", true);
+        let forget = Submenu::new(networkmgr_core::tr!("Forget Network"), true);
         for network in &snapshot.saved {
             add!(
                 forget,
@@ -232,8 +246,12 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
     }
 
     if state.kind == Some("wifi") {
-        let submenu = Submenu::new("Connect to Network", true);
-        add!(submenu, "Scan for Networks", Action::Scan(nic.clone()));
+        let submenu = Submenu::new(networkmgr_core::tr!("Available Connections"), true);
+        add!(
+            submenu,
+            networkmgr_core::tr!("Scan for Networks"),
+            Action::Scan(nic.clone())
+        );
         let saved_ids: HashMap<&str, &str> = snapshot
             .saved
             .iter()
@@ -263,11 +281,15 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
     let _ = menu.append(&PredefinedMenuItem::separator());
     add!(
         menu,
-        "Restart Networking",
+        networkmgr_core::tr!("Restart Networking"),
         Action::Restart(state.card.clone())
     );
     let _ = menu.append(&PredefinedMenuItem::separator());
-    add!(menu, "Close Network Manager", Action::Close);
+    add!(
+        menu,
+        networkmgr_core::tr!("Close Network Manager"),
+        Action::Close
+    );
 
     (menu, actions)
 }
@@ -307,8 +329,14 @@ fn dispatch(action: Action) {
                 }
             }
             ConnectPlan::Unsupported => show_message(
-                "Enterprise network",
-                &format!("{ssid} needs 802.1X credentials; use the configuration window."),
+                networkmgr_core::tr!("Enterprise network"),
+                &format!(
+                    "{} {}",
+                    ssid,
+                    networkmgr_core::tr!(
+                        "needs 802.1X credentials; use the configuration window."
+                    )
+                ),
             ),
         },
         Action::Forget { ssid, nic } => {
@@ -411,15 +439,17 @@ fn confirm_restart(card: Option<&str>) -> bool {
     use gtk::prelude::*;
     let target = card.unwrap_or("all interfaces");
     let text = format!(
-        "Restart networking on {target}?\n\nThe interface goes down briefly and the connection may drop."
+        "{}\n\n{}",
+        networkmgr_core::tr!("Restart networking on %s?").replace("%s", target),
+        networkmgr_core::tr!("The interface goes down briefly and the connection may drop.")
     );
     let dialog = gtk::Dialog::with_buttons(
-        Some("Restart Networking"),
+        Some(networkmgr_core::tr!("Restart Networking")),
         None::<&gtk::Window>,
         gtk::DialogFlags::MODAL,
         &[
-            ("Cancel", gtk::ResponseType::Cancel),
-            ("Restart", gtk::ResponseType::Ok),
+            (networkmgr_core::tr!("Cancel"), gtk::ResponseType::Cancel),
+            (networkmgr_core::tr!("Restart"), gtk::ResponseType::Ok),
         ],
     );
     dialog.set_default_response(gtk::ResponseType::Cancel);
@@ -439,20 +469,21 @@ fn confirm_restart(_card: Option<&str>) -> bool {
 #[cfg(feature = "appindicator")]
 fn ask_password(ssid: &str) -> Option<String> {
     use gtk::prelude::*;
+    let title = networkmgr_core::tr!("Connect to %s").replace("%s", ssid);
     let dialog = gtk::Dialog::with_buttons(
-        Some(&format!("Connect to {ssid}")),
+        Some(&title),
         None::<&gtk::Window>,
         gtk::DialogFlags::MODAL,
         &[
-            ("Cancel", gtk::ResponseType::Cancel),
-            ("Connect", gtk::ResponseType::Ok),
+            (networkmgr_core::tr!("Cancel"), gtk::ResponseType::Cancel),
+            (networkmgr_core::tr!("Connect"), gtk::ResponseType::Ok),
         ],
     );
     dialog.set_default_response(gtk::ResponseType::Ok);
     let entry = gtk::Entry::new();
     entry.set_visibility(false);
     entry.set_activates_default(true);
-    entry.set_placeholder_text(Some("Wi-Fi password"));
+    entry.set_placeholder_text(Some(networkmgr_core::tr!("Password:")));
     dialog.content_area().add(&entry);
     dialog.show_all();
     let response = dialog.run();
@@ -492,6 +523,7 @@ fn show_message(_title: &str, text: &str) {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    networkmgr_core::i18n::init();
     #[cfg(feature = "appindicator")]
     gtk::init()?;
 
