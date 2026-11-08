@@ -32,13 +32,15 @@ use networkmgr_core::sys::{RealRunner, Sys};
 use networkmgr_core::wg::{self, WgDictionary};
 use networkmgr_core::wpa::{self, SavedNetwork, ScanResult};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
-use tray_icon::{Icon, TrayIconBuilder, TrayIconEvent};
+use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
 const WG_CONFIG_DIR: &str = "/usr/local/etc/wireguard";
 #[cfg_attr(not(feature = "appindicator"), allow(dead_code))]
 const REFRESH_SECONDS: u32 = 30;
 /// 等一次无线连接完成的上限，与 Python `wait_for_connection()` 一致。
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+/// 32×32 应用图标 RGBA，由 `src/icons/scalable/apps/networkmgr.svg` 生成。
+const APP_ICON_RGBA: &[u8] = include_bytes!("../../assets/networkmgr-32.rgba");
 /// 动画帧间隔，与 Python 的 `GLib.timeout_add(300, ...)` 一致。
 const ANIMATION_MILLIS: u64 = 300;
 /// 连接失败后的总尝试次数，与 Python 的 `MAX_ATTEMPTS` 一致。
@@ -525,18 +527,35 @@ fn open_configuration(nic: &str) {
             .arg(nic)
             .spawn()
         {
-            Ok(_) => {
+            Ok(child) => {
+                debug_log(&format!("opened {program} for {nic} (pid {})", child.id()));
                 println!("networkmgr: opened configuration for {nic}");
                 return;
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                debug_log(&format!("{program} not found"));
+            }
             Err(error) => {
+                debug_log(&format!("failed to open {program}: {error}"));
                 eprintln!("networkmgr: failed to open {program}: {error}");
                 return;
             }
         }
     }
+    debug_log("configuration window not found");
     eprintln!("networkmgr: configuration window not found");
+}
+
+fn debug_log(message: &str) {
+    use std::io::Write;
+    let path = std::env::temp_dir().join("networkmgr-debug.log");
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = writeln!(file, "{message}");
+    }
 }
 
 fn execute(action: Action) {
@@ -1164,8 +1183,114 @@ fn show_message(_title: &str, text: &str) {
     eprintln!("networkmgr: {text}");
 }
 
+/// 把 DBus/X 环境对齐到当前桌面会话。
+///
+/// root 通过 `sudo` 启动时，libayatana 必须连接桌面用户的 session bus；
+/// root 直接登录时则从 `xfce4-panel` 的环境里取，并降权到该用户运行。
+fn prepare_session_environment() {
+    let Some(pid) = find_panel() else {
+        return;
+    };
+    let env = process_env(&pid);
+    let bus = env_value(&env, "DBUS_SESSION_BUS_ADDRESS");
+    let display = env_value(&env, "DISPLAY").unwrap_or_else(|| ":0".to_string());
+    let xauthority = env_value(&env, "XAUTHORITY");
+    if let Some(bus) = &bus {
+        std::env::set_var("DBUS_SESSION_BUS_ADDRESS", bus);
+    }
+    if std::env::var_os("DISPLAY").is_none() {
+        std::env::set_var("DISPLAY", &display);
+    }
+    if std::env::var_os("XAUTHORITY").is_none() {
+        if let Some(xauthority) = &xauthority {
+            std::env::set_var("XAUTHORITY", xauthority);
+        }
+    }
+    if !is_root() {
+        return;
+    }
+    let user = std::env::var("SUDO_USER")
+        .ok()
+        .or_else(|| process_owner(&pid))
+        .filter(|user| user != "root");
+    let Some(user) = user else {
+        return;
+    };
+    relaunch_as(&user, &display, xauthority.as_deref(), bus.as_deref());
+    std::process::exit(0);
+}
+
+fn find_panel() -> Option<String> {
+    let output = std::process::Command::new("pgrep")
+        .args(["-x", "xfce4-panel"])
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()
+        .map(str::to_string)
+}
+
+fn process_env(pid: &str) -> String {
+    std::process::Command::new("procstat")
+        .args(["-e", pid])
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .unwrap_or_default()
+}
+
+fn env_value(text: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key}=");
+    text.split_whitespace()
+        .find(|part| part.starts_with(&prefix))
+        .map(|part| part[prefix.len()..].to_string())
+}
+
+fn process_owner(pid: &str) -> Option<String> {
+    let output = std::process::Command::new("ps")
+        .args(["-o", "user=", "-p", pid])
+        .output()
+        .ok()?;
+    let user = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if user.is_empty() {
+        None
+    } else {
+        Some(user)
+    }
+}
+
+fn is_root() -> bool {
+    std::process::Command::new("id")
+        .arg("-u")
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim() == "0")
+        .unwrap_or(false)
+}
+
+fn relaunch_as(user: &str, display: &str, xauthority: Option<&str>, bus: Option<&str>) {
+    let exe = std::env::current_exe().unwrap_or_default();
+    let mut command = format!("env DISPLAY={display}");
+    if let Some(xauthority) = xauthority {
+        command.push_str(&format!(" XAUTHORITY={xauthority}"));
+    }
+    if let Some(bus) = bus {
+        command.push_str(&format!(" DBUS_SESSION_BUS_ADDRESS='{bus}'"));
+    }
+    command.push(' ');
+    command.push_str(&exe.to_string_lossy());
+    for arg in std::env::args().skip(1) {
+        command.push(' ');
+        command.push_str(&arg);
+    }
+    debug_log(&format!("relaunching as {user}: {command}"));
+    let _ = std::process::Command::new("su")
+        .args(["-m", user, "-c", &command])
+        .status();
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     networkmgr_core::i18n::init();
+    prepare_session_environment();
     #[cfg(feature = "appindicator")]
     gtk::init()?;
 
@@ -1272,6 +1397,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let icon_rx = TrayIconEvent::receiver();
     let actions_events = Arc::clone(&actions);
     let tx_events = tx.clone();
+    let card_events = snapshot.state.card.clone();
     thread::spawn(move || loop {
         if let Ok(event) = menu_rx.try_recv() {
             let action = actions_events
@@ -1287,7 +1413,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         if let Ok(event) = icon_rx.try_recv() {
-            println!("networkmgr: tray event {event:?}");
+            debug_log(&format!("tray event {event:?}"));
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                if let Some(card) = &card_events {
+                    let _ = tx_events.send(UiRequest::Action(Action::Configure(card.clone())));
+                }
+            }
         }
         if Instant::now() >= deadline {
             println!("networkmgr: timeout, exiting");
@@ -1322,7 +1458,54 @@ fn icon_for(signal: Option<i32>, wireless: bool) -> Icon {
         Some(value) if value >= 25 => 2,
         Some(_) => 1,
     };
-    bars_icon(bars, wireless)
+    app_icon(bars, wireless)
+}
+
+/// 应用图标 + 右下角状态角标：有线显示绿/红点，无线显示 4 格信号。
+fn app_icon(bars: u32, wireless: bool) -> Icon {
+    const SIZE: u32 = 32;
+    let mut pixels = APP_ICON_RGBA.to_vec();
+    let color = if !wireless {
+        if bars == 0 {
+            (200, 80, 80)
+        } else {
+            (80, 200, 120)
+        }
+    } else if bars >= 3 {
+        (60, 150, 90)
+    } else if bars >= 1 {
+        (200, 150, 60)
+    } else {
+        (170, 70, 70)
+    };
+    let mut put = |x: u32, y: u32| {
+        let index = ((y * SIZE + x) * 4) as usize;
+        if index + 3 < pixels.len() {
+            pixels[index] = color.0;
+            pixels[index + 1] = color.1;
+            pixels[index + 2] = color.2;
+            pixels[index + 3] = 255;
+        }
+    };
+    if wireless {
+        for slot in 0..4 {
+            if slot < bars {
+                let x0 = 18 + slot * 3;
+                for y in 24..29 {
+                    for x in x0..x0 + 2 {
+                        put(x, y);
+                    }
+                }
+            }
+        }
+    } else {
+        for y in 24..29 {
+            for x in 23..28 {
+                put(x, y);
+            }
+        }
+    }
+    Icon::from_rgba(pixels, SIZE, SIZE).expect("32x32 RGBA icon is valid")
 }
 
 /// 直接按格数绘制，供连接动画逐帧调用（0→4 格循环）。
