@@ -59,7 +59,9 @@ jobs:
 
   build-aarch64:
     name: Package aarch64
-    runs-on: ubuntu-latest
+    # 公开仓库可用的 arm64 托管 runner；同架构跑 FreeBSD arm64 VM，
+    # 比在 x86 runner 上做 TCG 跨架构模拟快得多。
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
 
