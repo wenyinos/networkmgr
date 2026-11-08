@@ -324,6 +324,24 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t38",
+    "title": "pkg 打包脚本与 amd64 验证",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "build-pkg.sh；networkmgr-0.1.0-amd64.pkg（226 文件）",
+    "criteria": "pkg add/delete 通过；sudoers 440；.mo 与图标齐全",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t39",
+    "title": "release workflow 发布 0.1.0（amd64/aarch64）",
+    "type": "构建",
+    "status": "done",
+    "deliverable": ".github/workflows/release.yml；docs/RELEASE-0.1.0.md",
+    "criteria": "tag 触发构建两个 pkg 并直接上传 GitHub Release",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t35",
     "title": "真实 EAP 认证（企业级 AP）",
     "type": "分析",

@@ -1078,3 +1078,16 @@ P1 风险（第 9 节）：老机器的 `/etc/wpa_supplicant.conf` 只有 `netwo
   `.pem`/`.crt`/`.cer`/`.key`，窗口居中、整行左对齐、hover 高亮。
 - 新增文案（Connect to Hidden Network / Open network / Browse / Select Certificate）进 7 个 po。
 - 测试：core **104**、GUI **12**。
+
+## 40. 0.1.0 发布与 pkg 打包（2026-11-09）
+
+- 新增 `.github/workflows/release.yml`：推 `v*` tag 或手动触发，在 FreeBSD 15.1 上
+  分别以 **amd64 / aarch64** 构建，打 `.pkg`，再用 `gh release create/upload`
+  直接创建 GitHub Release 并上传。
+- 新增 `.github/scripts/build-pkg.sh`：stage 目录 + plist + `+MANIFEST`，
+  `pkg create -f txz`；安装五个二进制、desktop、sudoers（440）、devd 规则、
+  wpa 模板、hicolor 图标、7 个 `.mo`；文件名追加架构后缀。
+- VM 实测（amd64）：`networkmgr-0.1.0-amd64.pkg` 4.7 MB / 226 文件；
+  `pkg add` 成功，sudoers 权限 440，`pkg delete` 干净卸载。
+- 发布说明：`docs/RELEASE-0.1.0.md`；README 增加 pkg 安装步骤。
+- aarch64 由 QEMU TCG 模拟构建，耗时可能很长；workflow 会如实报告成功/失败。

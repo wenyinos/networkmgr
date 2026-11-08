@@ -4,18 +4,30 @@
 并尽量保持原项目的外部契约：安装路径、sudoers、devd 事件、`rc.conf`、
 `wpa_supplicant.conf`、XDG 自启动与 gettext 翻译。
 
-> **本分支 `feat/rust-rewrite` 是本 fork 的默认分支，仍处于开发阶段，
-> 尚无可安装的 Rust 版网络管理器。** 上游 `ghostbsd/networkmgr` 的 `master`
-> 仍是正式发行版本；本分支不能按发行版方式安装使用。
+> **0.1.0 预览版已发布**：GitHub Releases 提供 FreeBSD 15 的 amd64 / aarch64
+> `.pkg`（见 [Releases](https://github.com/wenyinos/networkmgr/releases)）。
+> 尚未进入 FreeBSD port；上游 `ghostbsd/networkmgr` 的 `master` 仍是 Python 版。
+
+## 安装（0.1.0）
+
+```sh
+sudo pkg add ./networkmgr-0.1.0-amd64.pkg
+# 或
+sudo pkg install -y ./networkmgr-0.1.0-amd64.pkg
+```
+
+安装后重新登录桌面会话；托盘通过 XDG 自启动。卸载用 `sudo pkg delete -y networkmgr`。
+发布说明见 [`docs/RELEASE-0.1.0.md`](docs/RELEASE-0.1.0.md)。
 
 ## 仓库内容
 
 | 路径 | 说明 |
 |---|---|
 | [`docs/RUST_REWRITE_PLAN.md`](docs/RUST_REWRITE_PLAN.md) | 完整方案：外部契约冻结、四阶段迁移、A/B/C 验收矩阵、风险登记、ADR、实测记录 |
-| [`rust/`](rust/) | 零依赖 `networkmgr-core`：**98 个契约测试**，覆盖配置校验、`wpa_cli` 输出解析、`ifconfig` / `netstat` / `sysrc` 解析、`rc.conf` / `resolv.conf` 安全写入、WireGuard、托盘状态聚合、MO 翻译目录、devd 事件处理、命令执行层；含 `dump-state`、`apply-config`、`networkmgr-devd` 三个二进制 |
-| [`rust/spikes/`](rust/spikes/) | 四个 GUI 程序（10 个测试）：eframe/glow 最小窗口、tray-icon 原生菜单托盘、配置窗口（COSMIC 风格，明暗双主题 + IPv4/IPv6 校验预览）、托盘主程序（动态子菜单、30 秒刷新、扫描连接与 Forget、gettext 菜单） |
+| [`rust/`](rust/) | 零依赖 `networkmgr-core`：**104 个契约测试**，覆盖配置校验、`wpa_cli` 输出解析、`ifconfig` / `netstat` / `sysrc` 解析、`rc.conf` / `resolv.conf` 安全写入、WireGuard、托盘状态聚合、MO 翻译目录、devd 事件处理、命令执行层；含 `dump-state`、`apply-config`、`networkmgr-devd` 三个二进制 |
+| [`rust/spikes/`](rust/spikes/) | 四个 GUI 程序（12 个测试）：eframe/glow 最小窗口、tray-icon 原生菜单托盘、配置窗口（COSMIC 风格，明暗双主题 + IPv4/IPv6 校验预览）、托盘主程序（动态子菜单、30 秒刷新、扫描连接与 Forget、gettext 菜单） |
 | [`.github/workflows/freebsd-rust.yml`](.github/workflows/freebsd-rust.yml) | 远端 FreeBSD 15.1 构建：core 测试 + 全部 GUI 程序，产出七个 FreeBSD 二进制 |
+| [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag 触发：FreeBSD 15.1 amd64 / aarch64 构建 `.pkg` 并直接创建 GitHub Release |
 | [`rust/spikes/deploy-to-vm.sh`](rust/spikes/deploy-to-vm.sh) | 把 CI 产物拷进 `freebsd15` VM 实跑验收 |
 | [`docs/execution-report-2026-11-07.md`](docs/execution-report-2026-11-07.md) | 分轮实施记录：做了什么、验证到什么程度、哪些没做 |
 
@@ -101,8 +113,8 @@ VM 绿灯不等于验收完成；阶段 3 结束必须同时有 B 与 C 的记�
   仍有 300 ms 连接动画、企业级 EAP 凭据收集（引导至配置窗口）未实现。
 - **本地化**：托盘与配置窗口的字符串都已走 `tr!`，7 个现有 `.po` 已补齐配置窗口与新增菜单项；
   未提供翻译的语言或条目按 gettext 规则回退英文，`de_DE` 这类区域名会回退到 `de`。
-- **没有可安装的发行包**：旧 Python 实现与 `setup.py` 已删除，但 FreeBSD port 尚未迁移到
-  Rust，阶段 4（打包）仍未完成。
+- **尚未进入 FreeBSD port**：0.1.0 以 GitHub Release 的 `.pkg` 发布；
+  port 迁移仍需与 `net-mgmt/networkmgr` 维护者协调。
 - 老机器的 `wpa_supplicant.conf` 可能缺 `ctrl_interface`，导致 `wpa_cli` 全链路不可用。
   配置窗口与托盘会检测并显示「修复控制接口」，等价于
   `apply-config --fix-wpa-ctrl`：备份后写入、chmod 0600，需手动重启 `wpa_supplicant` 生效。

@@ -442,3 +442,21 @@
 - 证书选择器从 `/etc/ssl` 起始，只显示证书/私钥后缀；窗口居中、列表左对齐、整行可点。
 - 修复了 egui `Window::anchor` 未配 `pivot` 导致的偏右下问题。
 - core **104**、GUI **12** 测试通过。
+
+---
+
+## 第十八轮（2026-11-09）：0.1.0 发布与 pkg 打包
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 60 | pkg 打包脚本 | 构建 | `.github/scripts/build-pkg.sh`；226 文件 | ✅ 完成 |
+| 61 | amd64 VM 打包验证 | 分析 | 4.7 MB pkg；安装/卸载通过 | ✅ 完成 |
+| 62 | release workflow（amd64/aarch64） | 构建 | `.github/workflows/release.yml` | ✅ 完成 |
+| 63 | 发布说明与 README | 写作 | `docs/RELEASE-0.1.0.md`；pkg 安装步骤 | ✅ 完成 |
+
+### 关键结果
+
+- pkg 包含五个二进制、desktop、sudoers（440）、devd 规则、wpa 模板、
+  hicolor 图标与 7 个 `.mo`。
+- VM 上 `pkg add` 安装成功，`pkg delete` 后无残留。
+- release workflow 用 tag 触发，构建两个架构后直接上传到 GitHub Release。
