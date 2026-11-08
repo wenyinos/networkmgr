@@ -23,9 +23,16 @@
 
 配置窗口（阶段 2）已按 COSMIC / iced 视觉重做，侧边栏底部一键切换明暗，配色从参考图逐像素取色：
 
-| 明色主题 | 暗色主题 |
+| 明色主题（无线接口） | 暗色主题（无线接口） |
 |---|---|
 | ![明色主题](docs/images/config-light.png) | ![暗色主题](docs/images/config-dark.png) |
+
+| 有线接口（以太网） |
+|---|
+| ![有线接口](docs/images/config-ethernet.png) |
+
+> 有线与无线共用同一个「网络」页：IPv4/IPv6 配置通用，接口下拉会列出 `ifconfig -l`
+> 过滤后的真实接口；只有选中 `wlan*` 时才显示 Wi-Fi 凭据卡片。
 
 托盘菜单已接入 gettext，按 `LANG` 自动选择现有 7 种翻译。下面是 FreeBSD 15 VM 上
 `LANG=zh_CN.UTF-8` 的实拍：

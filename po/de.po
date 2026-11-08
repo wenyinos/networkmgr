@@ -373,3 +373,6 @@ msgstr "Wi-Fi-Netzwerk"
 msgid "Saved"
 msgstr "Gespeichert"
 
+msgid "Network"
+msgstr "Netzwerk"
+

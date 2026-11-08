@@ -475,8 +475,15 @@ impl ConfigWindow {
 
     fn body(&mut self, ui: &mut egui::Ui, theme: &Theme) {
         ui.add_space(4.0);
+        // 同一个页面同时服务有线与无线；标题只反映当前接口类型。
+        let wireless = self.interfaces[self.selected].contains("wlan");
+        let heading = if wireless {
+            "Wi-Fi".to_string()
+        } else {
+            networkmgr_core::tr!("Ethernet Network").to_string()
+        };
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Wi-Fi").size(22.0).strong().color(theme.text));
+            ui.label(RichText::new(heading).size(22.0).strong().color(theme.text));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if self.apply_for_real {
                     if primary_button(ui, theme, networkmgr_core::tr!("Apply")).clicked() {
@@ -597,7 +604,9 @@ impl ConfigWindow {
         });
 
         ui.add_space(12.0);
-        card(theme).show(ui, |ui| self.wifi_card(ui, theme));
+        if wireless {
+            card(theme).show(ui, |ui| self.wifi_card(ui, theme));
+        }
 
         if !self.errors.is_empty() {
             ui.add_space(12.0);
@@ -792,7 +801,13 @@ impl ConfigWindow {
         );
         ui.add_space(14.0);
 
-        if nav_item(ui, theme, "📶", "Wi-Fi", self.nav == Nav::Wifi) {
+        if nav_item(
+            ui,
+            theme,
+            "🌐",
+            networkmgr_core::tr!("Network"),
+            self.nav == Nav::Wifi,
+        ) {
             self.nav = Nav::Wifi;
         }
         ui.add_space(4.0);

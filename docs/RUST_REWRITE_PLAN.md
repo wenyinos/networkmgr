@@ -987,6 +987,8 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
   保留 `wlan`；配置窗口只列可用接口。
 - **配置窗口 Wi-Fi 凭据**：Wi-Fi 页新增 SSID / PSK / EAP / OPEN 卡片，`--apply` 才写 daemon；
   EAP 支持方法、身份、口令、内层认证、CA 证书。
+- **有线/无线共用页面**：导航「Wi-Fi」改为「网络」，标题按接口类型显示 `Wi-Fi` 或「以太网」；
+  Wi-Fi 凭据卡片只在 `wlan*` 接口下显示。
 - 主线程统一处理 `UiRequest::{Action, ConnectOutcome, Refresh}`，工作线程只发事件。
 - 测试：core **102**、GUI **12**；新增 2 条文案（Wi-Fi Network / Saved）进全部 7 个 po。
 

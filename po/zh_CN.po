@@ -365,3 +365,6 @@ msgstr "Wi-Fi 网络"
 msgid "Saved"
 msgstr "已保存"
 
+msgid "Network"
+msgstr "网络"
+
