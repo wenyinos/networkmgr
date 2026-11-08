@@ -33,6 +33,7 @@ jobs:
           run: |
             set -eu
             VERSION="${VERSION:-0.1.0}"
+            REPO_ROOT=$(pwd)
             cd rust
             CARGO_TARGET_DIR=/tmp/nm-core cargo build --release --locked \
               --bin dump-state --bin apply-config --bin networkmgr-devd
@@ -46,8 +47,8 @@ jobs:
             cp /tmp/nm-spikes/release/networkmgr \
                /tmp/nm-spikes/release/config-window \
                /tmp/nm-bin/
-            cd ..
-            BUILD_DIR=/tmp/nm-bin REPO_ROOT=$(pwd) VERSION="${VERSION}" \
+            cd "$REPO_ROOT"
+            BUILD_DIR=/tmp/nm-bin REPO_ROOT="$REPO_ROOT" VERSION="${VERSION}" \
               OUT_DIR=artifacts sh .github/scripts/build-pkg.sh
 
       - uses: actions/upload-artifact@v4
@@ -75,6 +76,7 @@ jobs:
           run: |
             set -eu
             VERSION="${VERSION:-0.1.0}"
+            REPO_ROOT=$(pwd)
             cd rust
             CARGO_TARGET_DIR=/tmp/nm-core cargo build --release --locked \
               --bin dump-state --bin apply-config --bin networkmgr-devd
@@ -88,8 +90,8 @@ jobs:
             cp /tmp/nm-spikes/release/networkmgr \
                /tmp/nm-spikes/release/config-window \
                /tmp/nm-bin/
-            cd ..
-            BUILD_DIR=/tmp/nm-bin REPO_ROOT=$(pwd) VERSION="${VERSION}" \
+            cd "$REPO_ROOT"
+            BUILD_DIR=/tmp/nm-bin REPO_ROOT="$REPO_ROOT" VERSION="${VERSION}" \
               OUT_DIR=artifacts sh .github/scripts/build-pkg.sh
 
       - uses: actions/upload-artifact@v4

@@ -1076,9 +1076,6 @@ fn ask_eap_credentials(ssid: &str) -> Option<config::EapConfig> {
 
     let password_toggle = password.clone();
     let phase2_toggle = phase2.clone();
-    let client_toggle = client_cert.clone();
-    let key_toggle = private_key.clone();
-    let key_password_toggle = key_password.clone();
     let tls_widgets = [
         client_cert.clone(),
         private_key.clone(),
