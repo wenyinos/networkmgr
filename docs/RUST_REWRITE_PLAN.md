@@ -999,6 +999,8 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - VPN 页读取 `/usr/local/etc/wireguard`，列出隧道与状态，可直接启停。
 - 明暗切换固定到侧栏左下角（按剩余高度推到底部）。
 - 布局收紧：侧栏 252→220、卡片内边距 16→12、按钮与胶囊缩小、间距 12→8。
+- 窗口宽度固定 760；高度按页签自适应（以太网 400 / 无线 560 / VPN 320），
+  切换页签时用 `ViewportCommand::InnerSize` 收到内容附近，避免大面积空白。
 - 新增 `NETWORKMGR_PAGE=wire|wireless|vpn`，方便截图与脚本直接打开指定页。
 - 新增文案「No interfaces found.」「No WireGuard tunnels found.」进全部 7 个 po。
 - 主线程统一处理 `UiRequest::{Action, ConnectOutcome, Refresh}`，工作线程只发事件。

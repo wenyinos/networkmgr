@@ -200,6 +200,7 @@ struct ConfigWindow {
     limit: Option<Duration>,
     dark: bool,
     nav: Nav,
+    last_nav: Nav,
     tab: Tab,
     /// 当前页签使用的接口列表；切换页签时由 `switch_nav` 重新填充。
     interfaces: Vec<String>,
@@ -253,6 +254,7 @@ impl Default for ConfigWindow {
             limit: None,
             dark: false,
             nav: Nav::Wire,
+            last_nav: Nav::Wire,
             tab: Tab::Ipv4,
             interfaces: wire.clone(),
             selected: 0,
@@ -973,13 +975,24 @@ impl ConfigWindow {
 
 impl eframe::App for ConfigWindow {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // 每页内容高度差很大；切换时把窗口收到内容附近，避免大片空白。
+        if self.last_nav != self.nav {
+            self.last_nav = self.nav;
+            let height = match self.nav {
+                Nav::Wire => 400.0,
+                Nav::Wireless => 560.0,
+                Nav::Vpn => 320.0,
+            };
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(760.0, height)));
+        }
         let theme = Theme::for_mode(self.dark);
         apply_visuals(ui.ctx(), &theme);
 
         // egui 0.37 把 SidePanel 并进了 Panel 且不再提供固定宽度方法，
         // 所以两栏背景自己画，尺寸完全可控，也更贴近参考图。
         let full = ui.max_rect();
-        let sidebar_width = 220.0;
+        let sidebar_width = 200.0;
         let sidebar_rect =
             egui::Rect::from_min_size(full.min, egui::vec2(sidebar_width, full.height()));
         let body_rect =
@@ -993,7 +1006,7 @@ impl eframe::App for ConfigWindow {
             |ui| self.sidebar_contents(ui, &theme),
         );
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(body_rect.shrink2(egui::vec2(18.0, 12.0))),
+            egui::UiBuilder::new().max_rect(body_rect.shrink2(egui::vec2(16.0, 10.0))),
             |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| match self.nav {
                     Nav::Wire | Nav::Wireless => self.body(ui, &theme),
@@ -1046,9 +1059,15 @@ fn main() -> eframe::Result<()> {
         .map(str::to_string)
         .filter(|name| networkmgr_core::ifconfig::is_configurable_interface(name))
         .collect();
+    let page = std::env::var("NETWORKMGR_PAGE").unwrap_or_default();
+    let initial_height = match page.as_str() {
+        "wire" => 400.0,
+        "vpn" => 320.0,
+        _ => 560.0,
+    };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([980.0, 680.0])
+            .with_inner_size([760.0, initial_height])
             .with_icon(window_icon())
             .with_title(networkmgr_core::tr!("NetworkMgr configuration")),
         renderer: eframe::Renderer::Glow,

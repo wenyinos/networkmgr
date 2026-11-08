@@ -32,7 +32,8 @@
 |---|
 | ![WireGuard VPN](docs/images/config-vpn.png) |
 
-> 有线与无线共用地址配置表单；只有无线页显示 Wi-Fi 凭据卡片。
+> 有线与无线共用地址配置表单；只有无线页显示 Wi-Fi 凭据卡片。窗口宽度固定 760，
+> 高度按页签自适应（以太网 400 / 无线 560 / VPN 320）。
 > 截图来自本机实跑（`LANG=zh_CN.UTF-8`，`NETWORKMGR_PAGE=wire|wireless|vpn`），
 > 不是设计稿；默认 dry-run，只有 `--apply` 才会写入 `rc.conf`、`resolv.conf` 与 wpa 网络块。
 
