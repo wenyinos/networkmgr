@@ -390,6 +390,7 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
 
 /// 主线程上的动作分发：需要对话框的动作在这里弹窗，阻塞命令交给工作线程。
 fn dispatch(action: Action, tx: &mpsc::Sender<UiRequest>) {
+    debug_log(&format!("dispatch {action:?}"));
     match action {
         Action::Close => std::process::exit(0),
         Action::Restart(card) => {
@@ -1400,6 +1401,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let card_events = snapshot.state.card.clone();
     thread::spawn(move || loop {
         if let Ok(event) = menu_rx.try_recv() {
+            debug_log(&format!("menu event id={}", event.id.0));
             let action = actions_events
                 .lock()
                 .expect("actions lock")
