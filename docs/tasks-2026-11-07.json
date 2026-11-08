@@ -270,6 +270,15 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t32",
+    "title": "配置窗口改为三页签（以太网 / Wi-Fi / VPN）并收紧布局",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "Nav 三页签；VPN 隧道启停；主题按钮左下角；3 张中文截图",
+    "criteria": "删除占位页；NETWORKMGR_PAGE 可直开指定页；core 102 / GUI 12",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",

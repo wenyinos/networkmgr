@@ -376,3 +376,9 @@ msgstr "Сохранено"
 msgid "Network"
 msgstr "Сеть"
 
+msgid "No interfaces found."
+msgstr "Интерфейсы не найдены."
+
+msgid "No WireGuard tunnels found."
+msgstr "Туннели WireGuard не найдены."
+

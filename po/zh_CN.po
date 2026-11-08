@@ -368,3 +368,9 @@ msgstr "已保存"
 msgid "Network"
 msgstr "网络"
 
+msgid "No interfaces found."
+msgstr "没有找到可用接口。"
+
+msgid "No WireGuard tunnels found."
+msgstr "没有找到 WireGuard 隧道。"
+

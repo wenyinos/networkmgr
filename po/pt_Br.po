@@ -376,3 +376,9 @@ msgstr "Salvo"
 msgid "Network"
 msgstr "Rede"
 
+msgid "No interfaces found."
+msgstr "Nenhuma interface encontrada."
+
+msgid "No WireGuard tunnels found."
+msgstr "Nenhum túnel WireGuard encontrado."
+

@@ -376,3 +376,9 @@ msgstr "Gespeichert"
 msgid "Network"
 msgstr "Netzwerk"
 
+msgid "No interfaces found."
+msgstr "Keine Schnittstellen gefunden."
+
+msgid "No WireGuard tunnels found."
+msgstr "Keine WireGuard-Tunnel gefunden."
+

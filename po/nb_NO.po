@@ -376,3 +376,9 @@ msgstr "Lagret"
 msgid "Network"
 msgstr "Nettverk"
 
+msgid "No interfaces found."
+msgstr "Fant ingen grensesnitt."
+
+msgid "No WireGuard tunnels found."
+msgstr "Fant ingen WireGuard-tunneler."
+

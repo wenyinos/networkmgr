@@ -109,12 +109,12 @@ fn card(theme: &Theme) -> egui::Frame {
     egui::Frame::NONE
         .fill(theme.card)
         .corner_radius(CornerRadius::same(12))
-        .inner_margin(Margin::same(16))
+        .inner_margin(Margin::same(12))
 }
 
 /// 分区小标题，对应参考图里的 `Debug` / `Buttons` / `Controls`。
 fn section(ui: &mut egui::Ui, theme: &Theme, text: &str) {
-    ui.label(RichText::new(text).size(14.0).strong().color(theme.text));
+    ui.label(RichText::new(text).size(13.0).strong().color(theme.text));
 }
 
 /// 胶囊按钮：选中时填充主色，未选中时透明。
@@ -128,7 +128,7 @@ fn pill(ui: &mut egui::Ui, theme: &Theme, text: &str, selected: bool) -> egui::R
         egui::Button::new(RichText::new(text).color(color))
             .fill(fill)
             .corner_radius(16.0)
-            .min_size(egui::vec2(96.0, 32.0)),
+            .min_size(egui::vec2(88.0, 30.0)),
     )
 }
 
@@ -138,7 +138,7 @@ fn primary_button(ui: &mut egui::Ui, theme: &Theme, text: &str) -> egui::Respons
         egui::Button::new(RichText::new(text).color(theme.accent_text))
             .fill(theme.accent)
             .corner_radius(16.0)
-            .min_size(egui::vec2(110.0, 34.0)),
+            .min_size(egui::vec2(96.0, 30.0)),
     )
 }
 
@@ -148,7 +148,7 @@ fn secondary_button(ui: &mut egui::Ui, theme: &Theme, text: &str) -> egui::Respo
         egui::Button::new(RichText::new(text).color(theme.secondary_text))
             .fill(theme.secondary)
             .corner_radius(16.0)
-            .min_size(egui::vec2(96.0, 34.0)),
+            .min_size(egui::vec2(88.0, 30.0)),
     )
 }
 
@@ -163,7 +163,7 @@ fn nav_item(ui: &mut egui::Ui, theme: &Theme, icon: &str, text: &str, selected: 
         egui::Button::new(RichText::new(format!("{icon}  {text}")).color(color))
             .fill(fill)
             .corner_radius(18.0)
-            .min_size(egui::vec2(212.0, 36.0)),
+            .min_size(egui::vec2(188.0, 32.0)),
     );
     response.clicked()
 }
@@ -172,9 +172,9 @@ fn nav_item(ui: &mut egui::Ui, theme: &Theme, icon: &str, text: &str, selected: 
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Nav {
-    Wifi,
-    Desktop,
-    Upgrade,
+    Wire,
+    Wireless,
+    Vpn,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -201,8 +201,13 @@ struct ConfigWindow {
     dark: bool,
     nav: Nav,
     tab: Tab,
+    /// 当前页签使用的接口列表；切换页签时由 `switch_nav` 重新填充。
     interfaces: Vec<String>,
     selected: usize,
+    wire_interfaces: Vec<String>,
+    wireless_interfaces: Vec<String>,
+    selected_wire: usize,
+    selected_wireless: usize,
     method4: Method4,
     ip: String,
     netmask: String,
@@ -229,6 +234,7 @@ struct ConfigWindow {
     eap_phase2: String,
     eap_ca: String,
     wifi_status: String,
+    vpn_status: String,
     runner: RealRunner,
 }
 
@@ -241,14 +247,19 @@ enum WifiSecurity {
 
 impl Default for ConfigWindow {
     fn default() -> Self {
+        let wire = vec!["em0".to_string(), "em0.10".to_string()];
         Self {
             started: Instant::now(),
             limit: None,
             dark: false,
-            nav: Nav::Wifi,
+            nav: Nav::Wire,
             tab: Tab::Ipv4,
-            interfaces: vec!["em0".to_string(), "wlan0".to_string(), "em0.10".to_string()],
+            interfaces: wire.clone(),
             selected: 0,
+            wire_interfaces: wire,
+            wireless_interfaces: vec!["wlan0".to_string()],
+            selected_wire: 0,
+            selected_wireless: 0,
             method4: Method4::Dhcp,
             ip: String::new(),
             netmask: "255.255.255.0".to_string(),
@@ -275,18 +286,50 @@ impl Default for ConfigWindow {
             eap_phase2: "MSCHAPV2".to_string(),
             eap_ca: String::new(),
             wifi_status: String::new(),
+            vpn_status: String::new(),
             runner: RealRunner::new(),
         }
     }
 }
 
 impl ConfigWindow {
+    /// 切换页签时保存当前接口选择，并换入该页的接口列表。
+    fn switch_nav(&mut self, nav: Nav) {
+        if self.nav == nav {
+            return;
+        }
+        match self.nav {
+            Nav::Wire => self.selected_wire = self.selected,
+            Nav::Wireless => self.selected_wireless = self.selected,
+            Nav::Vpn => {}
+        }
+        self.nav = nav;
+        let (list, selected) = match nav {
+            Nav::Wire => (self.wire_interfaces.clone(), self.selected_wire),
+            Nav::Wireless => (self.wireless_interfaces.clone(), self.selected_wireless),
+            Nav::Vpn => (Vec::new(), 0),
+        };
+        self.interfaces = list;
+        self.selected = selected.min(self.interfaces.len().saturating_sub(1));
+        self.preview.clear();
+        self.errors.clear();
+        self.status.clear();
+    }
+
+    /// 当前页签选中的接口；没有可用接口时返回 None。
+    fn current_nic(&self) -> Option<String> {
+        self.interfaces.get(self.selected).cloned()
+    }
+
     fn apply(&mut self) {
         self.errors.clear();
         self.commands.clear();
         self.resolv = None;
         self.status.clear();
-        let nic = self.interfaces[self.selected].clone();
+        let Some(nic) = self.current_nic() else {
+            self.status = format!("FAILED: {}", networkmgr_core::tr!("No interfaces found."));
+            return;
+        };
 
         let rc_nic = match validate::interface(&nic) {
             Ok(_) => validate::rc_conf_interface(&nic),
@@ -423,7 +466,10 @@ impl ConfigWindow {
     /// 把无线凭据写入 daemon 并保存；只有 `--apply` 才真的执行。
     fn save_wifi(&mut self) {
         self.wifi_status.clear();
-        let nic = self.interfaces[self.selected].clone();
+        let Some(nic) = self.current_nic() else {
+            self.wifi_status = format!("FAILED: {}", networkmgr_core::tr!("No interfaces found."));
+            return;
+        };
         if self.wifi_ssid.trim().is_empty() {
             self.wifi_status = "FAILED: SSID is empty".to_string();
             return;
@@ -474,16 +520,16 @@ impl ConfigWindow {
     }
 
     fn body(&mut self, ui: &mut egui::Ui, theme: &Theme) {
-        ui.add_space(4.0);
-        // 同一个页面同时服务有线与无线；标题只反映当前接口类型。
-        let wireless = self.interfaces[self.selected].contains("wlan");
+        ui.add_space(2.0);
+        // 页签已经区分有线/无线，标题直接跟随页签。
+        let wireless = self.nav == Nav::Wireless;
         let heading = if wireless {
             "Wi-Fi".to_string()
         } else {
             networkmgr_core::tr!("Ethernet Network").to_string()
         };
         ui.horizontal(|ui| {
-            ui.label(RichText::new(heading).size(22.0).strong().color(theme.text));
+            ui.label(RichText::new(heading).size(20.0).strong().color(theme.text));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if self.apply_for_real {
                     if primary_button(ui, theme, networkmgr_core::tr!("Apply")).clicked() {
@@ -501,11 +547,22 @@ impl ConfigWindow {
             .size(12.0)
             .color(theme.muted),
         );
-        ui.add_space(12.0);
+        ui.add_space(8.0);
+
+        if self.current_nic().is_none() {
+            card(theme).show(ui, |ui| {
+                ui.label(
+                    RichText::new(networkmgr_core::tr!("No interfaces found."))
+                        .size(13.0)
+                        .color(theme.muted),
+                );
+            });
+            return;
+        }
 
         card(theme).show(ui, |ui| {
             section(ui, theme, networkmgr_core::tr!("Interface"));
-            ui.add_space(6.0);
+            ui.add_space(4.0);
             ui.horizontal(|ui| {
                 let current = self.interfaces[self.selected].clone();
                 egui::ComboBox::from_id_salt("nic")
@@ -516,7 +573,7 @@ impl ConfigWindow {
                             ui.selectable_value(&mut self.selected, index, name);
                         }
                     });
-                ui.add_space(12.0);
+                ui.add_space(8.0);
                 if pill(ui, theme, "IPv4", self.tab == Tab::Ipv4).clicked() {
                     self.tab = Tab::Ipv4;
                 }
@@ -526,7 +583,7 @@ impl ConfigWindow {
             });
         });
 
-        ui.add_space(12.0);
+        ui.add_space(8.0);
         card(theme).show(ui, |ui| match self.tab {
             Tab::Ipv4 => {
                 section(ui, theme, "IPv4");
@@ -603,13 +660,13 @@ impl ConfigWindow {
             }
         });
 
-        ui.add_space(12.0);
+        ui.add_space(8.0);
         if wireless {
             card(theme).show(ui, |ui| self.wifi_card(ui, theme));
         }
 
         if !self.errors.is_empty() {
-            ui.add_space(12.0);
+            ui.add_space(8.0);
             card(theme).show(ui, |ui| {
                 section(ui, theme, networkmgr_core::tr!("Validation"));
                 ui.add_space(4.0);
@@ -620,7 +677,7 @@ impl ConfigWindow {
         }
 
         if !self.preview.is_empty() {
-            ui.add_space(12.0);
+            ui.add_space(8.0);
             card(theme).show(ui, |ui| {
                 section(ui, theme, networkmgr_core::tr!("Preview"));
                 ui.add_space(4.0);
@@ -639,7 +696,7 @@ impl ConfigWindow {
         }
 
         if !self.status.is_empty() {
-            ui.add_space(12.0);
+            ui.add_space(8.0);
             let color = if self.status.starts_with("FAILED") {
                 theme.destructive
             } else {
@@ -685,7 +742,7 @@ impl ConfigWindow {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.wifi_password)
                             .password(true)
-                            .desired_width(240.0),
+                            .desired_width(220.0),
                     );
                 });
             }
@@ -725,7 +782,7 @@ impl ConfigWindow {
                         ui.add(
                             egui::TextEdit::singleline(&mut self.eap_password)
                                 .password(true)
-                                .desired_width(240.0),
+                                .desired_width(220.0),
                         );
                         ui.end_row();
                         ui.label(
@@ -772,20 +829,93 @@ impl ConfigWindow {
 /// 表单一行：左侧标签、右侧输入框。
 fn field(ui: &mut egui::Ui, theme: &Theme, label: &str, value: &mut String) {
     ui.label(RichText::new(label).size(13.0).color(theme.text));
-    ui.add(egui::TextEdit::singleline(value).desired_width(240.0));
+    ui.add(egui::TextEdit::singleline(value).desired_width(220.0));
     ui.end_row();
 }
 
-fn placeholder(ui: &mut egui::Ui, theme: &Theme, title: &str, body: &str) {
-    ui.add_space(4.0);
-    ui.label(RichText::new(title).size(22.0).strong().color(theme.text));
-    ui.add_space(12.0);
-    card(theme).show(ui, |ui| {
-        ui.label(RichText::new(body).size(13.0).color(theme.muted));
-    });
-}
-
 impl ConfigWindow {
+    /// WireGuard 页：列出配置目录里的隧道，直接启停。
+    fn vpn_body(&mut self, ui: &mut egui::Ui, theme: &Theme) {
+        use networkmgr_core::wg;
+
+        ui.add_space(2.0);
+        ui.label(
+            RichText::new(networkmgr_core::tr!("WireGuard VPN"))
+                .size(20.0)
+                .strong()
+                .color(theme.text),
+        );
+        ui.add_space(8.0);
+
+        let tunnels = {
+            let sys = Sys::new(&self.runner);
+            let raw = sys.sysrc_get("wireguard_enable");
+            let service = wg::service_state(if raw.trim().is_empty() {
+                None
+            } else {
+                Some(&raw)
+            });
+            wg::build_dictionary(
+                &service,
+                &sys.wg_configs(std::path::Path::new("/usr/local/etc/wireguard")),
+            )
+        };
+
+        if tunnels.configs.is_empty() {
+            card(theme).show(ui, |ui| {
+                ui.label(
+                    RichText::new(networkmgr_core::tr!("No WireGuard tunnels found."))
+                        .size(13.0)
+                        .color(theme.muted),
+                );
+            });
+            return;
+        }
+
+        for (device, config) in tunnels.configs {
+            let connected = config.state == "Connected";
+            let mut clicked = false;
+            card(theme).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(config.info.clone())
+                            .size(15.0)
+                            .strong()
+                            .color(theme.text),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let label = if connected {
+                            networkmgr_core::tr!("Disable %s").replace("%s", &config.info)
+                        } else {
+                            format!("{} {}", networkmgr_core::tr!("Enable"), config.info)
+                        };
+                        if secondary_button(ui, theme, &label).clicked() {
+                            clicked = true;
+                        }
+                    });
+                });
+                ui.label(RichText::new(config.state).size(11.0).color(theme.muted));
+            });
+            if clicked {
+                let sys = Sys::new(&self.runner);
+                let action = if connected { "down" } else { "up" };
+                match sys.wg_quick(action, &device) {
+                    Ok(()) => self.vpn_status = format!("wg-quick {action} {device}"),
+                    Err(error) => self.vpn_status = format!("FAILED {device}: {error}"),
+                }
+            }
+        }
+
+        if !self.vpn_status.is_empty() {
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(&self.vpn_status)
+                    .size(12.0)
+                    .color(theme.muted),
+            );
+        }
+    }
+
     fn sidebar_contents(&mut self, ui: &mut egui::Ui, theme: &Theme) {
         ui.add_space(4.0);
         ui.label(
@@ -804,34 +934,32 @@ impl ConfigWindow {
         if nav_item(
             ui,
             theme,
-            "🌐",
-            networkmgr_core::tr!("Network"),
-            self.nav == Nav::Wifi,
+            "🖧",
+            networkmgr_core::tr!("Ethernet Network"),
+            self.nav == Nav::Wire,
         ) {
-            self.nav = Nav::Wifi;
+            self.switch_nav(Nav::Wire);
         }
         ui.add_space(4.0);
-        let desktop = networkmgr_core::tr!("Desktop");
-        if nav_item(ui, theme, "🖥", desktop, self.nav == Nav::Desktop) {
-            self.nav = Nav::Desktop;
+        if nav_item(ui, theme, "📶", "Wi-Fi", self.nav == Nav::Wireless) {
+            self.switch_nav(Nav::Wireless);
         }
         ui.add_space(4.0);
         if nav_item(
             ui,
             theme,
-            "🧩",
-            networkmgr_core::tr!("OS Upgrade & Recovery"),
-            self.nav == Nav::Upgrade,
+            "🔒",
+            networkmgr_core::tr!("WireGuard VPN"),
+            self.nav == Nav::Vpn,
         ) {
-            self.nav = Nav::Upgrade;
+            self.switch_nav(Nav::Vpn);
         }
 
-        ui.add_space(18.0);
-        ui.label(
-            RichText::new(networkmgr_core::tr!("Theme"))
-                .size(12.0)
-                .color(theme.muted),
-        );
+        // 主题切换固定在左下角，与参考布局一致。
+        let remaining = ui.available_height();
+        if remaining > 44.0 {
+            ui.add_space(remaining - 44.0);
+        }
         ui.horizontal(|ui| {
             if pill(ui, theme, networkmgr_core::tr!("Light"), !self.dark).clicked() {
                 self.dark = false;
@@ -851,7 +979,7 @@ impl eframe::App for ConfigWindow {
         // egui 0.37 把 SidePanel 并进了 Panel 且不再提供固定宽度方法，
         // 所以两栏背景自己画，尺寸完全可控，也更贴近参考图。
         let full = ui.max_rect();
-        let sidebar_width = 252.0;
+        let sidebar_width = 220.0;
         let sidebar_rect =
             egui::Rect::from_min_size(full.min, egui::vec2(sidebar_width, full.height()));
         let body_rect =
@@ -861,28 +989,15 @@ impl eframe::App for ConfigWindow {
         ui.painter().rect_filled(sidebar_rect, 0.0, theme.sidebar);
 
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(sidebar_rect.shrink2(egui::vec2(14.0, 12.0))),
+            egui::UiBuilder::new().max_rect(sidebar_rect.shrink2(egui::vec2(12.0, 10.0))),
             |ui| self.sidebar_contents(ui, &theme),
         );
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(body_rect.shrink2(egui::vec2(22.0, 16.0))),
+            egui::UiBuilder::new().max_rect(body_rect.shrink2(egui::vec2(18.0, 12.0))),
             |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| match self.nav {
-                    Nav::Wifi => self.body(ui, &theme),
-                    Nav::Desktop => placeholder(
-                        ui,
-                        &theme,
-                        networkmgr_core::tr!("Desktop"),
-                        networkmgr_core::tr!("Desktop settings arrive with stage 3."),
-                    ),
-                    Nav::Upgrade => placeholder(
-                        ui,
-                        &theme,
-                        networkmgr_core::tr!("OS Upgrade & Recovery"),
-                        networkmgr_core::tr!(
-                            "Not part of NetworkMgr; kept to match the reference layout."
-                        ),
-                    ),
+                    Nav::Wire | Nav::Wireless => self.body(ui, &theme),
+                    Nav::Vpn => self.vpn_body(ui, &theme),
                 });
             },
         );
@@ -933,7 +1048,7 @@ fn main() -> eframe::Result<()> {
         .collect();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([900.0, 640.0])
+            .with_inner_size([980.0, 680.0])
             .with_icon(window_icon())
             .with_title(networkmgr_core::tr!("NetworkMgr configuration")),
         renderer: eframe::Renderer::Glow,
@@ -950,15 +1065,51 @@ fn main() -> eframe::Result<()> {
                 ..Default::default()
             };
             if !discovered.is_empty() {
-                window.interfaces = discovered;
+                window.wire_interfaces = discovered
+                    .iter()
+                    .filter(|name| !name.contains("wlan"))
+                    .cloned()
+                    .collect();
+                window.wireless_interfaces = discovered
+                    .iter()
+                    .filter(|name| name.contains("wlan"))
+                    .cloned()
+                    .collect();
+                window.selected_wire = 0;
+                window.selected_wireless = 0;
+                window.interfaces = window.wire_interfaces.clone();
                 window.selected = 0;
             }
+            match std::env::var("NETWORKMGR_PAGE")
+                .unwrap_or_default()
+                .as_str()
+            {
+                "wire" => window.switch_nav(Nav::Wire),
+                "wireless" => window.switch_nav(Nav::Wireless),
+                "vpn" => window.switch_nav(Nav::Vpn),
+                _ => {}
+            }
             if let Some(nic) = requested {
-                if !window.interfaces.iter().any(|item| item == &nic) {
-                    window.interfaces.push(nic.clone());
+                let wireless = nic.contains("wlan");
+                let list = if wireless {
+                    &mut window.wireless_interfaces
+                } else {
+                    &mut window.wire_interfaces
+                };
+                if !list.iter().any(|item| item == &nic) {
+                    list.push(nic.clone());
                 }
-                if let Some(index) = window.interfaces.iter().position(|item| item == &nic) {
-                    window.selected = index;
+                let selected = list.iter().position(|item| item == &nic).unwrap_or(0);
+                if wireless {
+                    window.selected_wireless = selected;
+                    window.nav = Nav::Wireless;
+                    window.interfaces = window.wireless_interfaces.clone();
+                    window.selected = selected;
+                } else {
+                    window.selected_wire = selected;
+                    window.nav = Nav::Wire;
+                    window.interfaces = window.wire_interfaces.clone();
+                    window.selected = selected;
                 }
             }
             Ok(Box::new(window))
@@ -1027,7 +1178,7 @@ mod tests {
     #[test]
     fn wireless_interface_gets_the_wpa_prefix() {
         let mut window = window();
-        window.selected = 1;
+        window.switch_nav(Nav::Wireless);
         window.apply();
         assert!(window.preview.contains("ifconfig_wlan0=WPA DHCP"));
     }

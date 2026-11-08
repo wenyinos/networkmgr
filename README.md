@@ -21,18 +21,20 @@
 
 ## 界面预览
 
-配置窗口（阶段 2）已按 COSMIC / iced 视觉重做，侧边栏底部一键切换明暗，配色从参考图逐像素取色：
+配置窗口（阶段 2）已按 COSMIC / iced 视觉重做，左侧三个页签分别是有线、无线与 VPN，
+明暗切换固定在左下角：
 
-| 明色主题（无线接口） | 暗色主题（无线接口） |
+| 以太网（浅色） | Wi-Fi（深色） |
 |---|---|
-| ![明色主题](docs/images/config-light.png) | ![暗色主题](docs/images/config-dark.png) |
+| ![以太网](docs/images/config-light.png) | ![Wi-Fi](docs/images/config-dark.png) |
 
-| 有线接口（以太网） |
+| WireGuard VPN（浅色） |
 |---|
-| ![有线接口](docs/images/config-ethernet.png) |
+| ![WireGuard VPN](docs/images/config-vpn.png) |
 
-> 有线与无线共用同一个「网络」页：IPv4/IPv6 配置通用，接口下拉会列出 `ifconfig -l`
-> 过滤后的真实接口；只有选中 `wlan*` 时才显示 Wi-Fi 凭据卡片。
+> 有线与无线共用地址配置表单；只有无线页显示 Wi-Fi 凭据卡片。
+> 截图来自本机实跑（`LANG=zh_CN.UTF-8`，`NETWORKMGR_PAGE=wire|wireless|vpn`），
+> 不是设计稿；默认 dry-run，只有 `--apply` 才会写入 `rc.conf`、`resolv.conf` 与 wpa 网络块。
 
 托盘菜单已接入 gettext，按 `LANG` 自动选择现有 7 种翻译。下面是 FreeBSD 15 VM 上
 `LANG=zh_CN.UTF-8` 的实拍：

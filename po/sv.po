@@ -376,3 +376,9 @@ msgstr "Sparat"
 msgid "Network"
 msgstr "Nätverk"
 
+msgid "No interfaces found."
+msgstr "Inga gränssnitt hittades."
+
+msgid "No WireGuard tunnels found."
+msgstr "Inga WireGuard-tunnlar hittades."
+

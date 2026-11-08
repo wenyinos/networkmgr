@@ -989,6 +989,18 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
   EAP 支持方法、身份、口令、内层认证、CA 证书。
 - **有线/无线共用页面**：导航「Wi-Fi」改为「网络」，标题按接口类型显示 `Wi-Fi` 或「以太网」；
   Wi-Fi 凭据卡片只在 `wlan*` 接口下显示。
+
+## 35. 配置窗口布局重构（2026-11-08 21:50）
+
+按参考图重排配置窗口：
+
+- 删除「桌面」「系统升级与恢复」占位页；导航改为 **以太网 / Wi-Fi / WireGuard VPN** 三页。
+- 有线与无线各自维护接口列表与选择；切换页签时由 `switch_nav` 换入对应列表。
+- VPN 页读取 `/usr/local/etc/wireguard`，列出隧道与状态，可直接启停。
+- 明暗切换固定到侧栏左下角（按剩余高度推到底部）。
+- 布局收紧：侧栏 252→220、卡片内边距 16→12、按钮与胶囊缩小、间距 12→8。
+- 新增 `NETWORKMGR_PAGE=wire|wireless|vpn`，方便截图与脚本直接打开指定页。
+- 新增文案「No interfaces found.」「No WireGuard tunnels found.」进全部 7 个 po。
 - 主线程统一处理 `UiRequest::{Action, ConnectOutcome, Refresh}`，工作线程只发事件。
 - 测试：core **102**、GUI **12**；新增 2 条文案（Wi-Fi Network / Saved）进全部 7 个 po。
 

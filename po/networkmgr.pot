@@ -366,3 +366,9 @@ msgstr ""
 msgid "Network"
 msgstr ""
 
+msgid "No interfaces found."
+msgstr ""
+
+msgid "No WireGuard tunnels found."
+msgstr ""
+
