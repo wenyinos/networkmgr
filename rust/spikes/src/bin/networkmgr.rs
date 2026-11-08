@@ -241,7 +241,9 @@ fn build_menu(snapshot: &Snapshot) -> (Menu, HashMap<String, Action>) {
             .collect();
         for scan in &snapshot.scans {
             // 已经连上的 AP 不再出现在候选里，与 Python 的 passes 行为一致。
-            if state.connection == "Connected" && state.ssid.as_deref() == Some(scan.ssid.as_str()) {
+            let connected_here = state.connection == "Connected"
+                && state.ssid.as_deref() == Some(scan.ssid.as_str());
+            if connected_here {
                 continue;
             }
             add!(
