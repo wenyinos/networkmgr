@@ -13,7 +13,7 @@
   .sub { color:var(--muted); font-size:13px; margin-bottom:8px; }
   .progress { display:flex; align-items:center; gap:10px; margin:12px 0 20px; }
   .bar { flex:1; height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; }
-  .fill { height:100%; background:#34a853; width:94.1%; transition:width .3s; }
+  .fill { height:100%; background:#34a853; width:95%; transition:width .3s; }
   .pct { font-size:13px; color:var(--muted); white-space:nowrap; }
   .board { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
   @media (max-width:760px) { .board { grid-template-columns:1fr; } }
@@ -36,10 +36,10 @@
 <body>
 <div class="wrap">
   <h1>NetworkMgr Rust 重写任务看板</h1>
-  <div class="sub">2026-11-07 · 共 17 个任务 · 已完成 16 个</div>
+  <div class="sub">2026-11-07 · 共 20 个任务 · 已完成 19 个</div>
   <div class="progress">
     <div class="bar"><div class="fill"></div></div>
-    <span class="pct">94%</span>
+    <span class="pct">95%</span>
   </div>
   <div class="board"><div class="col"><div class="col-head"><span class="dot" style="background:#9aa0a6"></span>待办<span class="count">1</span></div><div class="card">
 <div class="card-head"><span class="tag" style="background:#f472b6">分析</span><span class="status" style="color:#9aa0a6;border-color:#9aa0a6">待办</span></div>
@@ -48,7 +48,7 @@
 <div class="kv"><span class="k">完成标准</span><span class="v">真实 wpa_cli 样本 + 无线连接全流程走通</span></div>
 </div></div>
 <div class="col"><div class="col-head"><span class="dot" style="background:#e8a33d"></span>进行中<span class="count">0</span></div></div>
-<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">16</span></div><div class="card">
+<div class="col"><div class="col-head"><span class="dot" style="background:#34a853"></span>已完成<span class="count">19</span></div><div class="card">
 <div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
 <div class="card-title">移植 config：rc.conf 安全写值、resolv.conf、PSK/WEP/Open/EAP 字段</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">rust/src/config.rs（592 行，13 个测试）</span></div>
@@ -143,6 +143,24 @@
 <div class="card-title">补完扫描连接、PSK/WEP 密码框与 Forget 子菜单</div>
 <div class="kv"><span class="k">预计产出</span><span class="v">wpa.rs 连接字段、sys.rs 六个 wpa 原语、托盘接线；core 86 + GUI 10 测试</span></div>
 <div class="kv"><span class="k">完成标准</span><span class="v">add/set/enable/select/remove 全套走通；连上才 save_config；失败删新建块</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">完整本地化接入：全局 catalog + tr! + 托盘/配置窗口全量替换</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">i18n.rs init/tr/tr!；两处 UI 约 130 处字符串；VM 中文菜单截图</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">LANG=zh_CN 菜单显示中文；NETWORKMGR_MO 端到端测试通过；po 不新增条目</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#0ea5e9">构建</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">devd 三脚本迁移为 Rust networkmgr-devd</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">devd.rs 约 500 行 / 10 测试；networkmgr.conf 改路径；CI 七个二进制</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">attach/link-up/link-down 行为对齐；VM epair attach 写入 rc.conf 并可清理</span></div>
+</div>
+<div class="card">
+<div class="card-head"><span class="tag" style="background:#f472b6">分析</span><span class="status" style="color:#34a853;border-color:#34a853">已完成</span></div>
+<div class="card-title">删除旧 Python 实现与缓存</div>
+<div class="kv"><span class="k">预计产出</span><span class="v">删除 NetworkMgr/、入口、setup.py、.pylintrc、src/*.py</span></div>
+<div class="kv"><span class="k">完成标准</span><span class="v">仓库内无 .py；Rust 测试与构建全绿</span></div>
 </div></div></div>
   <div class="footer">由 goal-driven-autonomous-agent 生成。详细结果见执行报告。</div>
 </div>

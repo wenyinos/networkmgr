@@ -859,6 +859,52 @@ CI 备注：`actions/upload-artifact@v4` 触发 GitHub 的 `Node.js 20 is deprec
 - VM 环境注意：root 无法连接 zemin 用户的 session bus（dbus EXTERNAL auth 拒绝），
   托盘验收需以 zemin 身份运行；`/proc` 未挂载，`ps eww` 也拿不到环境变量，只能用截图确认。
 
+## 29. 本地化接入、devd 迁移与删除旧 Python（2026-11-08 18:00，提交 `b19a0d9` / `d0d7597` / `acf941e` / `8c9176d`）
+
+### 本地化
+
+- `i18n.rs` 增加进程级 `OnceLock<Option<Catalog>>`、`init()` 与 `tr()`，并导出 `tr!` 宏。
+  语言按 `LC_ALL` → `LC_MESSAGES` → `LANG` 选择；`NETWORKMGR_LOCALE_DIR` 覆盖安装目录，
+  `NETWORKMGR_MO` 直接指定 `.mo`（测试与截图用）。找不到翻译时回退原文，不影响启动。
+- 托盘与配置窗口所有用户可见字符串改走 `tr!`；动态内容用现有 pot 的 `%s` 模板：
+  `tr!("Configure %s").replace("%s", card)`。状态词（Connected/Disabled 等）只用于
+  展示映射，逻辑判断仍比较内部英文值。
+- **po 不新增条目、不新增翻译**：直接使用现有 7 个 `.po`；`zh_CN.po` 采用
+  `i18n/complete-zh-cn` 分支已修好的版本（原来把 “Forget Network” 译成“以太网”）。
+  现有 pot 没有配置窗口与 “Saved Networks / Scan for Networks” 等新条目，这些位置
+  按 gettext 规则回退英文。
+- 验证：`NETWORKMGR_MO=/tmp/zh_CN.mo cargo test global_translation` 通过；
+  VM 上 `LANG=zh_CN.UTF-8 NETWORKMGR_MO=/tmp/zh_CN.mo` 启动托盘，菜单显示
+  “有线 vtnet0 已连接 / 禁用 vtnet0 / 配置 vtnet0 / 重启网络 / 退出网络管理器”，
+  截图 `docs/images/tray-menu-zh_CN.png` 已入库。
+
+### devd 迁移
+
+- 新增 `rust/src/devd.rs`：`attach` / `link_up` / `link_down` 三个事件，行为逐条对齐
+  `setup-nic.py` / `link-up.py` / `auto-switch.py`，包括非网卡正则的「任意位置匹配」
+  语义、`wlanN` 分配、`link-down` 标记文件与 DHCP 移交。
+- 系统交互走 `DevdEnv` trait，`RealEnv` 调 `Sys`，`FakeEnv` 在 Linux 上跑 10 个单测。
+- 新增二进制 `networkmgr-devd`，`src/networkmgr.conf` 的 action 全部改指
+  `/usr/local/bin/networkmgr-devd`；CI 产物从六个增加到七个。
+- VM 实测：无参数/未知事件退出码 1；`attach wlan0`、`link-up lo0` 被过滤且退出 0；
+  创建 `epair99` 后 `attach epair99a` 写入 `ifconfig_epair99a=DHCP`，清理变量与接口后
+  只剩 `vtnet0 lo0`。
+
+### 删除旧 Python
+
+`git rm` 删除 `NetworkMgr/`（7 个模块）、两个入口脚本、`setup.py`、`.pylintrc`、
+`src/setup-nic.py` / `src/link-up.py` / `src/auto-switch.py`，以及 `__pycache__`。
+保留 `src/icons/`、`src/networkmgr.conf`、`src/networkmgr.desktop`、`src/sudoers.d/`、
+`src/wpa_supplicant.conf` 与 `po/`——它们是数据与系统集成模板，不是 Python 实现。
+
+### 验证与遗留
+
+- core **98 passed**（+11）、GUI **10 passed**、`cargo fmt --check` 干净。
+- 远端 CI 在 `acf941e` 之后连续两次因 `anyvm` 下载 504 失败（外部服务，不是代码），
+  改用 VM 内 `pkg install rust` + 本机 Cargo registry 离线构建完成验收：
+  `cargo build --release --locked` 在 FreeBSD 15.1 上 3 分 37 秒产出 1.5 MB 托盘二进制。
+- 配置窗口与新增菜单项没有 `.po` 条目，按指令不补翻译；需要中文时必须另行补条目。
+
 
 
 

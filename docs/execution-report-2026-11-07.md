@@ -215,3 +215,41 @@
   只能靠 FakeRunner 单测与 CI 编译覆盖，仍需 C 类实机。
 - 300 ms 连接动画、企业级 EAP 凭据收集仍未实现。
 - 测试环境变更：VM 内用 `pkg install` 装了 `xdotool` 仅用于菜单点击，不属于项目依赖。
+
+---
+
+## 第七轮（17:30–18:10）：本地化接入、devd 迁移与删除旧 Python
+
+| # | 任务 | 类型 | 产出 | 状态 |
+|---|---|---|---|---|
+| 22 | i18n 全局入口 `init()` / `tr()` / `tr!` 宏 | 构建 | `i18n.rs` +85 行 / 1 个端到端测试 | ✅ 完成 |
+| 23 | 托盘与配置窗口全部字符串接入 `tr!` | 构建 | `networkmgr.rs`、`config-window.rs` 约 130 处 | ✅ 完成 |
+| 24 | devd 三脚本迁移为 `networkmgr-devd` | 构建 | `devd.rs` 约 500 行 / 10 测试；`networkmgr.conf` 改路径 | ✅ 完成 |
+| 25 | 删除旧 Python 实现 | 清理 | 13 个文件（`NetworkMgr/`、入口、`setup.py`、`src/*.py`） | ✅ 完成 |
+| 26 | VM 中文菜单与 devd 实机验收 | 分析 | `docs/images/tray-menu-zh_CN.png`、epair attach 记录 | ✅ 完成 |
+| 27 | README / 方案 / 报告 / 看板同步 | 写作 | README 界面预览与纯 Rust 说明、方案第 29 节 | ✅ 完成 |
+
+### 关键结果
+
+- **翻译链路打通**：`i18n.rs` 用 `OnceLock` 保存进程级目录，`tr!` 直接返回译串；
+  `LANG`/`LC_ALL` 选择语言，`NETWORKMGR_LOCALE_DIR` 与 `NETWORKMGR_MO` 用于未安装运行。
+  `NETWORKMGR_MO=/tmp/zh_CN.mo cargo test global_translation` 断言
+  “Restart Networking” → “重启网络”。
+- **复用现有 po，不新增条目**：`zh_CN.po` 换用 `i18n/complete-zh-cn` 分支已修好的版本
+  （原版把 “Forget Network” 译成“以太网”）。配置窗口与新菜单项没有对应条目，按规则回退英文。
+- **托盘中文实测**：VM 上 `LANG=zh_CN.UTF-8` 启动，菜单依次显示
+  “有线 vtnet0 已连接 / 禁用 vtnet0 / 配置 vtnet0 / 重启网络 / 退出网络管理器”。
+- **devd 迁移**：`is_not_nic` 保留原正则的任意位置匹配语义；`link_down` 倒序/标记文件/
+  DHCP 移交逐条对齐。VM 实测 `attach epair99a` 写入 `ifconfig_epair99a=DHCP`，
+  参数错误退出 1，过滤名退出 0，清理后只剩 `vtnet0 lo0`。
+- **旧代码清理**：删除 `NetworkMgr/`、`networkmgr`、`networkmgr_configuration`、`setup.py`、
+  `.pylintrc`、三个 devd Python 脚本；保留图标、desktop、sudoers、wpa 模板与 `po/`。
+- 测试：core **98 passed**、GUI **10 passed**、`cargo fmt --check` 干净。
+
+### 未执行 / 遗留
+
+- **远端 CI 未产出本次二进制**：`anyvm` 下载连续 504（外部服务），改用 VM 内
+  `pkg install rust` + 本机 Cargo registry 离线构建，3 分 37 秒编译成功。
+- 配置窗口字符串没有 `.po` 条目，按指令不补翻译，界面回退英文。
+- FreeBSD port 尚未迁移到 Rust，仍没有可安装包；`sudoers`/desktop 的安装路径需在 port 阶段定稿。
+- C 类实机（真实 Wi-Fi / EAP）仍未验收。

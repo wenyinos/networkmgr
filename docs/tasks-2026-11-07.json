@@ -144,6 +144,33 @@
     "report": "execution-report-2026-11-07.md"
   },
   {
+    "id": "t18",
+    "title": "完整本地化接入：全局 catalog + tr! + 托盘/配置窗口全量替换",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "i18n.rs init/tr/tr!；两处 UI 约 130 处字符串；VM 中文菜单截图",
+    "criteria": "LANG=zh_CN 菜单显示中文；TM NETWORKMGR_MO 端到端测试通过；po 不新增条目",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t19",
+    "title": "devd 三脚本迁移为 Rust networkmgr-devd",
+    "type": "构建",
+    "status": "done",
+    "deliverable": "devd.rs 约 500 行 / 10 测试；networkmgr.conf 改路径；CI 七个二进制",
+    "criteria": "attach/link-up/link-down 行为对齐；VM epair attach 写入 rc.conf 并可清理",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
+    "id": "t20",
+    "title": "删除旧 Python 实现与缓存",
+    "type": "清理",
+    "status": "done",
+    "deliverable": "删除 NetworkMgr/、入口、setup.py、.pylintrc、src/*.py",
+    "criteria": "仓库内无 .py；Rust 测试与构建全绿",
+    "report": "execution-report-2026-11-07.md"
+  },
+  {
     "id": "t8",
     "title": "C 类实机验收（真实 Wi-Fi / EAP / ctrl_interface）",
     "type": "分析",
