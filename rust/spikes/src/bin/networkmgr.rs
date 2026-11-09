@@ -1403,7 +1403,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let refresh_channel = Rc::clone(&refresh);
         let tx_channel = tx.clone();
+        let actions_events = Arc::clone(&actions);
+        let card_events = snapshot.state.card.clone();
         gtk::glib::timeout_add_local(Duration::from_millis(100), move || {
+            // appindicator 后端把菜单交给面板插件渲染，点击事件经 dbusmenu
+            // 回到这里。gtk::main() 会阻塞主线程，所以事件轮询必须放在这个
+            // 定时器里；放到 gtk::main() 之后再 spawn 线程永远不会执行。
+            while let Ok(event) = MenuEvent::receiver().try_recv() {
+                debug_log(&format!("menu event id={}", event.id.0));
+                let action = actions_events
+                    .lock()
+                    .expect("actions lock")
+                    .get(&event.id.0)
+                    .cloned();
+                if let Some(action) = action {
+                    dispatch(action, &tx_channel);
+                }
+            }
+            while let Ok(event) = TrayIconEvent::receiver().try_recv() {
+                debug_log(&format!("tray event {event:?}"));
+                if let TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    if let Some(card) = &card_events {
+                        dispatch(Action::Configure(card.clone()), &tx_channel);
+                    }
+                }
+            }
             while let Ok(request) = rx.try_recv() {
                 match request {
                     UiRequest::Action(action) => dispatch(action, &tx_channel),
