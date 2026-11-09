@@ -1353,6 +1353,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "appindicator")]
     {
         use gtk::glib::translate::FromGlibPtrNone;
+        use gtk::glib::ObjectExt;
         let indicator = unsafe { tray.borrow().app_indicator() };
         let object: gtk::glib::Object = unsafe {
             gtk::glib::Object::from_glib_none(indicator as *mut gtk::glib::gobject_ffi::GObject)
@@ -1446,7 +1447,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 定时器里；放到 gtk::main() 之后再 spawn 线程永远不会执行。
             if TRAY_ACTIVATED.swap(false, Ordering::Relaxed) {
                 if let Some(menu) = &*menu_events.borrow() {
-                    use gtk::prelude::MenuExt;
+                    use gtk::prelude::GtkMenuExt;
                     menu.popup_at_pointer(None);
                 }
             }
