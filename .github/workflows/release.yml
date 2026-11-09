@@ -24,6 +24,7 @@ env:
 jobs:
   build-amd64:
     name: Package amd64
+    if: ${{ inputs.arch == '' || inputs.arch == 'both' || inputs.arch == 'amd64' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -67,8 +68,9 @@ jobs:
   build-aarch64:
     name: Package aarch64
     # 手动触发时可选只跑 amd64：arm64 上跑 FreeBSD VM 实测要 46 分钟以上，
-    # 卡住时不能让它拖住 amd64 的发布。
+    # 卡住时不能让它拖住 amd64 的发布。单独补包时给足时间，避免又被取消。
     if: ${{ inputs.arch == '' || inputs.arch == 'both' || inputs.arch == 'aarch64' }}
+    timeout-minutes: 150
     # 公开仓库可用的 arm64 托管 runner；同架构跑 FreeBSD arm64 VM，
     # 比在 x86 runner 上做 TCG 跨架构模拟快得多。
     runs-on: ubuntu-24.04-arm
@@ -114,9 +116,9 @@ jobs:
 
   release:
     name: Publish GitHub release
-    # amd64 成功就先发；aarch64 失败或被跳过不再阻塞发布。
+    # 任一架构成功就发布：单独补 aarch64 时 amd64 是被跳过（skipped）而不是失败。
     needs: [build-amd64, build-aarch64]
-    if: ${{ always() && needs.build-amd64.result == 'success' }}
+    if: ${{ always() && (needs.build-amd64.result == 'success' || needs.build-aarch64.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
