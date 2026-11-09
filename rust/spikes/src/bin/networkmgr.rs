@@ -48,6 +48,12 @@ const MAX_ATTEMPTS: u8 = 3;
 
 /// 连接尝试期间为 true；主线程据此循环播放信号格动画。
 static CONNECTING: AtomicBool = AtomicBool::new(false);
+
+/// 面板左键点击通过 SNI `Activate` 到达；libayatana 只有在应用连了
+/// `activate` 信号时才成功返回，否则面板不会回退弹菜单。这里只记下
+/// 请求，真正的 `popup` 交给 GTK 主循环，避免在 D-Bus 线程碰 GTK。
+#[cfg(feature = "appindicator")]
+static TRAY_ACTIVATED: AtomicBool = AtomicBool::new(false);
 /// 动画帧计数，每 300 ms 递增一次。
 static CONNECT_FRAME: AtomicUsize = AtomicUsize::new(0);
 
@@ -1322,6 +1328,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (menu, actions) = build_menu(&snapshot);
     let actions = Arc::new(Mutex::new(actions));
 
+    // 保存当前 GTK 菜单：左键点击时由主循环 popup 它。菜单内容随刷新
+    // 重建，所以 refresh 里也要同步替换。
+    #[cfg(feature = "appindicator")]
+    let current_menu: Rc<RefCell<Option<gtk::Menu>>> = {
+        use tray_icon::menu::ContextMenu;
+        Rc::new(RefCell::new(Some(menu.gtk_context_menu())))
+    };
+
     #[cfg_attr(not(feature = "appindicator"), allow(unused_variables))]
     let tray = Rc::new(RefCell::new(
         TrayIconBuilder::new()
@@ -1333,6 +1347,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_menu(Box::new(menu))
             .build()?,
     ));
+
+    // 连接 libayatana 的 activate 信号，让左键点击返回成功并弹出菜单；
+    // 不连的话面板收到 `No handler for Activate` 后什么都不会显示。
+    #[cfg(feature = "appindicator")]
+    {
+        use gtk::glib::translate::FromGlibPtrNone;
+        let indicator = unsafe { tray.borrow().app_indicator() };
+        let object: gtk::glib::Object = unsafe {
+            gtk::glib::Object::from_glib_none(indicator as *mut gtk::glib::gobject_ffi::GObject)
+        };
+        object.connect_local("activate", false, |_| {
+            TRAY_ACTIVATED.store(true, Ordering::Relaxed);
+            None
+        });
+    }
 
     println!(
         "networkmgr: tray ready, state = {}",
@@ -1352,6 +1381,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let actions_refresh = Arc::clone(&actions);
             let latest_refresh = Rc::clone(&latest);
             let last_refresh = Rc::clone(&last_snapshot);
+            let menu_refresh = Rc::clone(&current_menu);
             Rc::new(move || {
                 let snapshot = gather();
                 // 状态没变就别碰菜单：libdbusmenu 每次解析菜单都分配新的
@@ -1363,6 +1393,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let (menu, map) = build_menu(&snapshot);
                 *actions_refresh.lock().expect("actions lock") = map;
                 *latest_refresh.borrow_mut() = snapshot.state.clone();
+                {
+                    use tray_icon::menu::ContextMenu;
+                    *menu_refresh.borrow_mut() = Some(menu.gtk_context_menu());
+                }
                 let tray = tray_refresh.borrow();
                 let _ = tray.set_tooltip(Some(&snapshot.state.tooltip));
                 // 连接动画期间不要用静态图标覆盖动画帧。
@@ -1405,10 +1439,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tx_channel = tx.clone();
         let actions_events = Arc::clone(&actions);
         let card_events = snapshot.state.card.clone();
+        let menu_events = Rc::clone(&current_menu);
         gtk::glib::timeout_add_local(Duration::from_millis(100), move || {
             // appindicator 后端把菜单交给面板插件渲染，点击事件经 dbusmenu
             // 回到这里。gtk::main() 会阻塞主线程，所以事件轮询必须放在这个
             // 定时器里；放到 gtk::main() 之后再 spawn 线程永远不会执行。
+            if TRAY_ACTIVATED.swap(false, Ordering::Relaxed) {
+                if let Some(menu) = &*menu_events.borrow() {
+                    use gtk::prelude::MenuExt;
+                    menu.popup_at_pointer(None);
+                }
+            }
             while let Ok(event) = MenuEvent::receiver().try_recv() {
                 debug_log(&format!("menu event id={}", event.id.0));
                 let action = actions_events
