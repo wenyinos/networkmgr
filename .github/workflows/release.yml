@@ -6,6 +6,13 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Which architecture to package (amd64 / aarch64 / both)'
+        required: false
+        default: both
+        type: choice
+        options: [both, amd64, aarch64]
 
 permissions:
   contents: write
@@ -59,6 +66,9 @@ jobs:
 
   build-aarch64:
     name: Package aarch64
+    # 手动触发时可选只跑 amd64：arm64 上跑 FreeBSD VM 实测要 46 分钟以上，
+    # 卡住时不能让它拖住 amd64 的发布。
+    if: ${{ inputs.arch == '' || inputs.arch == 'both' || inputs.arch == 'aarch64' }}
     # 公开仓库可用的 arm64 托管 runner；同架构跑 FreeBSD arm64 VM，
     # 比在 x86 runner 上做 TCG 跨架构模拟快得多。
     runs-on: ubuntu-24.04-arm
@@ -104,14 +114,23 @@ jobs:
 
   release:
     name: Publish GitHub release
+    # amd64 成功就先发；aarch64 失败或被跳过不再阻塞发布。
     needs: [build-amd64, build-aarch64]
+    if: ${{ always() && needs.build-amd64.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/download-artifact@v4
         with:
-          path: pkg
+          name: networkmgr-pkg-amd64
+          path: pkg/amd64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: networkmgr-pkg-aarch64
+          path: pkg/aarch64
+        continue-on-error: true
 
       - name: Create or update release
         env:
@@ -124,7 +143,11 @@ jobs:
               --title "NetworkMgr ${VERSION}" \
               --notes-file docs/RELEASE-0.1.0.md
           fi
-          gh release upload "$TAG" \
-            pkg/networkmgr-pkg-amd64/*.pkg \
-            pkg/networkmgr-pkg-aarch64/*.pkg \
-            --clobber
+          shopt -s nullglob
+          files=(pkg/*/*.pkg)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no .pkg produced" >&2
+            exit 1
+          fi
+          printf 'uploading %d package(s)\n' "${#files[@]}"
+          gh release upload "$TAG" "${files[@]}" --clobber
