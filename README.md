@@ -4,23 +4,23 @@
 并尽量保持原项目的外部契约：安装路径、sudoers、devd 事件、`rc.conf`、
 `wpa_supplicant.conf`、XDG 自启动与 gettext 翻译。
 
-> **0.1.0 预览版已发布**：GitHub Releases 提供 FreeBSD 15 的 **amd64** `.pkg`
+> **0.2.0 预览版已发布**：GitHub Releases 提供 FreeBSD 15 的 **amd64** `.pkg`
 > （见 [Releases](https://github.com/wenyinos/networkmgr/releases)；aarch64 在 arm64
 > runner 上构建超时，暂未发布，需要时用 `workflow_dispatch` 的 `arch=aarch64` 单独补）。
 > 包名 **`networkmgr-rust`**，可与官方 Python 版 `networkmgr` 同时安装；
 > 尚未进入 FreeBSD port。
 
-## 安装（0.1.0）
+## 安装（0.2.0）
 
 ```sh
-sudo pkg add ./networkmgr-rust-0.1.0-amd64.pkg
+sudo pkg add ./networkmgr-rust-0.2.0-amd64.pkg
 # 或
-sudo pkg install -y ./networkmgr-rust-0.1.0-amd64.pkg
+sudo pkg install -y ./networkmgr-rust-0.2.0-amd64.pkg
 ```
 
 安装后从应用菜单启动「NetworkMgr (Rust)」，或运行 `sudo networkmgr-rust`。
 卸载用 `sudo pkg delete -y networkmgr-rust`。发布说明见
-[`docs/RELEASE-0.1.0.md`](docs/RELEASE-0.1.0.md)。
+[`docs/RELEASE-0.2.0.md`](docs/RELEASE-0.2.0.md)。
 
 与 Python 版共存：二进制是 `networkmgr-rust` / `networkmgr_configuration-rust`，
 desktop 放在 `share/applications`（不写 autostart），sudoers 与 devd 规则用独立文件，
@@ -116,12 +116,15 @@ VM 绿灯不等于验收完成；阶段 3 结束必须同时有 B 与 C 的记�
 
 ## 已知限制
 
-- **阶段 0 / 1 已完成，阶段 2 主体完成，阶段 3 主体完成**：逻辑层全部移植并在 FreeBSD 上跑通 98 个测试，
+- **0.1.0 的 pkg 缺 `libayatana-appindicator` 运行依赖**（干净系统上启动即 panic，退出码 101），
+  **0.2.0 已修复**：`+MANIFEST` 显式声明依赖，程序启动前也会自检并给出可照做的提示。
+  同版修复的还有 30–75 秒启动延迟、只认 Xfce 面板、root 父进程常驻，详见方案第 41 节。
+- **阶段 0 / 1 已完成，阶段 2 主体完成，阶段 3 主体完成**：逻辑层全部移植并在 FreeBSD 上跑通 104 个测试，
   配置窗口能校验、预览并（`--apply`）真写；托盘支持扫描连接、密码框、Forget 与 gettext 菜单。
   仍有 300 ms 连接动画、企业级 EAP 凭据收集（引导至配置窗口）未实现。
 - **本地化**：托盘与配置窗口的字符串都已走 `tr!`，7 个现有 `.po` 已补齐配置窗口与新增菜单项；
   未提供翻译的语言或条目按 gettext 规则回退英文，`de_DE` 这类区域名会回退到 `de`。
-- **尚未进入 FreeBSD port**：0.1.0 以 GitHub Release 的 `.pkg` 发布；
+- **尚未进入 FreeBSD port**：以 GitHub Release 的 `.pkg` 发布；
   port 迁移仍需与 `net-mgmt/networkmgr` 维护者协调。
 - 老机器的 `wpa_supplicant.conf` 可能缺 `ctrl_interface`，导致 `wpa_cli` 全链路不可用。
   配置窗口与托盘会检测并显示「修复控制接口」，等价于

@@ -1899,11 +1899,11 @@ dependencies = [
 
 [[package]]
 name = "networkmgr-core"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "networkmgr-spikes"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "eframe",
  "gtk",

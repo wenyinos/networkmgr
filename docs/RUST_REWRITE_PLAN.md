@@ -192,11 +192,16 @@ src/
 | | libappindicator（默认） | ksni |
 |---|---|---|
 | GTK 依赖 | 有（gtk3 + appindicator） | 无 |
-| 桌面兼容 | 与现有 GTK3 托盘行为最接近，MATE/XFCE 友好 | 需桌面实现 StatusNotifierItem；KDE Plasma 6 原生支持 |
+| 桌面兼容 | 与现有 GTK3 托盘行为最接近，MATE/XFCE 友好；**Cinnamon 实测可用**（无 watcher 时自动回退 XEmbed） | 需桌面实现 StatusNotifierItem；**Cinnamon 不提供 watcher，实测不可用** |
 | 事件循环 | **要求调用线程上有事件循环在跑** | 自带 worker 线程 |
 | sudo 运行 | 走 X11，与原 Python 版一致 | 需要 session D-Bus，`sudo` 下通常拿不到 → **高风险** |
 
 **推荐默认 `libappindicator`**：因为现有 `Exec=sudo networkmgr` 是硬契约，而 sudo 环境不保证 session bus。若将来把提权模型改成"普通用户跑 GUI + 特权操作单独提权"，再切 `ksni` 以彻底去掉 GTK。这个取舍要在第 12 节向维护者确认。
+
+**2026-11-09 Cinnamon 实测补充（见第 41 节）**：Cinnamon 6.4.13 不提供
+`org.kde.StatusNotifierWatcher`，但 `libayatana-appindicator` 会自动回退到 legacy **XEmbed**
+嵌入，Cinnamon 的 systray 依然接受，图标 24×24 正常显示。这条推翻了"桌面必须实现
+StatusNotifierItem 才能用"的默认假设，也说明 §41 里把探测目标从 watcher 改成 bus 本身是必要的。
 
 ### 5.2 翻译：不要引入新的系统依赖
 
@@ -1097,3 +1102,83 @@ P1 风险（第 9 节）：老机器的 `/etc/wpa_supplicant.conf` 只有 `netwo
   `NetworkMgr-rust`。这样可与官方 `net-mgmt/networkmgr` 同时安装。
 - aarch64 job 改用 GitHub 公开仓库的 `ubuntu-24.04-arm` runner，在同架构上跑
   FreeBSD arm64 VM，比 x86 TCG 跨架构模拟快。
+
+---
+
+## 41. 实机缺陷修复（2026-11-09，来自 Cinnamon 桌面测试报告）
+
+用户在 FreeBSD 15.1 + Cinnamon 6.4.13 上实测 0.1.0 的 pkg，提交了四个缺陷，逐条修复。
+
+### P0｜干净系统上托盘 panic（退出码 101）
+
+- **现象**：装完 pkg 启动无窗口、无图标、无提示，约 30 秒后进程消失，退出码 101。
+- **根因**：`libayatana-appindicator` 是 tray-icon 用 **dlopen** 加载的，不在 ELF 的 `NEEDED`
+  里，所以 `pkg create` 的依赖扫描发现不了；`+MANIFEST` 又没手写 `deps`。
+- **修复**：
+  1. `build-pkg.sh` 的 `+MANIFEST` 增加
+     `deps: { gtk3: {origin: "x11-toolkits/gtk30"}, "libayatana-appindicator": {origin: "x11-toolkits/libayatana-appindicator"} }`；
+  2. 代码侧在 `gtk::init()` 前加 `ensure_tray_library()`，检查四个候选 `.so` 路径，缺失时打印
+     中英双语提示（含 `pkg install` 命令）并 `exit(1)`，不再吐 Rust backtrace。
+
+### P1｜启动固定延迟 30–75 秒
+
+- **两个根因**：① `find_status_notifier_bus()` 只扫 `/tmp/dbus-*`，且探测目标写成
+  `org.kde.StatusNotifierWatcher`——Cinnamon 不提供该服务，于是活着的 bus 也全被判 false；
+  ② `dbus-send` 默认回复超时 25 秒，几十个残留套接字累加就是半分钟以上。
+- **修复**：顺序改为「环境变量 → `~/.dbus/session-bus/` 记录（root 时扫 `/home/*/`）→ `/tmp` 扫描」，
+  探测目标改成 `org.freedesktop.DBus.Peer.Ping`（只看 bus 是否活着），并加 `--reply-timeout=1000`。
+
+### P2｜`find_panel()` 只认 `xfce4-panel`
+
+- **根因**：Cinnamon / GNOME / MATE 上找不到面板 pid，只能退到 `SUDO_USER` 或 `$USER`；
+  没有 sudo 时连 `XAUTHORITY` 都设不上。
+- **修复**：按 `cinnamon` / `gnome-shell` / `xfce4-panel` / `mate-panel` / `plasmashell` /
+  `budgie-panel` / `lxpanel` / `lxsession` / `marco` / `muffin` 顺序探测。
+
+### P3｜`relaunch_as()` 让 root 父进程常驻
+
+- **根因**：`su ... .status()` 阻塞等待托盘退出，`Exec=sudo networkmgr-rust` 启动后
+  进程列表里永远多一个 root。
+- **修复**：改用 `.spawn()`，失败打印错误；调用方随后 `exit(0)`，root 进程立即消失。
+
+### 追加：普通用户运行时的提权路径（2026-11-09 用户实测反馈）
+
+普通用户运行托盘时点「修复控制接口」直接报"没有权限"。
+
+- **根因**：该动作在进程内直接 `read` / `write` `/etc/wpa_supplicant.conf`（`root:wheel 0600`），
+  而托盘经 `relaunch_as()` 以普通用户身份运行；`sudoers.d/networkmgr-rust` 只放行了
+  `networkmgr-rust` 整个二进制，没有 `apply-config`，所以既读不了也写不了。
+- **修复**：
+  1. 新增 `run_privileged()`：先 `sudo -n`（sudoers 免密条目，不打扰用户），
+     再 `pkexec`（polkit 认证对话框，Cinnamon / GNOME / XFCE / KDE 都自带 agent），
+     都不可用才提示可复制的命令。**不自己实现密码框**——口令不该经过本进程。
+  2. `sudoers.d/networkmgr-rust` 增加
+     `%wheel ALL=(ALL) NOPASSWD: /usr/local/bin/apply-config --fix-wpa-ctrl`
+     （只放行这一个子命令，不给整个二进制免密）。
+  3. 失败改用 `UiRequest::Notice` 回主线程弹窗——从桌面启动时 stderr 是看不到的，
+     之前只 `eprintln!` 等于没提示。
+- **仍是已知限制**：写 `rc.conf`、`ifconfig down`、`service netif restart` 等其它特权操作
+  在普通用户模式下同样受限，尚未逐一接入提权通道；阶段 4 收尾时要么统一走
+  `sudo -n` + 更细的 sudoers 条目，要么改成 polkit 规则。
+
+### 验证状态
+
+- `cargo test --no-default-features --features sni`：GUI **12 passed**，`cargo fmt --check` 干净。
+- **尚未重新打包验证**：需要一个新版本（或重跑 `release.yml`）才能确认干净系统上 `pkg add`
+  会自动拉起 `libayatana-appindicator`、且启动延迟降到 2 秒内。
+- 报告里两条无害警告保留不动：`libayatana-appindicator is deprecated`、
+  `Gdk-CRITICAL: gdk_window_thaw_toplevel_updates`。
+
+---
+
+## 42. 0.2.0 发布（2026-11-09，修复版）
+
+把第 41 节的五个修复打成 0.2.0，**只发 amd64**。
+
+- 版本号：`rust/Cargo.toml`、`rust/spikes/Cargo.toml` 与 `release.yml` 的 `VERSION` 全部 0.1.0 → 0.2.0。
+- `release.yml` 的 `TAG` 改为 `github.ref_type == 'tag' && ref_name || format('v{0}', env.VERSION)`：
+  之前非 tag 触发的兜底值硬编码成 `v0.1.0`，手动补包会把新包传进旧版本。
+- 发布说明新建 `docs/RELEASE-0.2.0.md`，含「相对 0.1.0 的修复」清单。
+- 触发方式用 `workflow_dispatch -f arch=amd64`，不走 tag——tag 触发会连 aarch64 一起跑。
+- 0.1.0 的 aarch64 构建（run `42574595069`，已跑 42 分钟）已取消，不再补发。
+- `docs/RELEASE-0.1.0.md` 保留作为历史记录。
