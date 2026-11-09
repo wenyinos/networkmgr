@@ -1,56 +1,14 @@
-*.py[cod]
+# Rust 构建产物由 rust/.gitignore 负责（/target/ 与 /spikes/target/）
 
-# C extensions
-*.so
-
-# Packages
-*.egg
-*.egg-info
-dist
-build
-eggs
-parts
-# 只忽略根目录的 Python 打包产物；无斜杠的 bin 会误伤 rust/spikes/src/bin/
-/bin
-var
-sdist
-develop-eggs
-.installed.cfg
-lib
-lib64
-__pycache__
-
-# Installer logs
-pip-log.txt
-
-# Unit test / coverage reports
-.coverage
-.tox
-nosetests.xml
-
-# Pipenv and lock files
-Pipfile
-Pipfile.lock
-venv/*
-venv*/*
-
-# Pycharm stuff
-.idea/*
-
-# Translations
+# 翻译编译产物（po/*.po 才是源）
 *.mo
-
-# Mr Developer
-.mr.developer.cfg
-.project
-.pydevproject
-
-# Editor Configuration Files
-.vscode
-
-# python core dump
-python*.core
 
 # FreeBSD CI 产物（下载到本目录后拷进 VM，不入库）
 /artifacts/
 
+# 编辑器
+.vscode
+.idea
+
+# 动态库（将来若产出 cdylib）
+*.so
