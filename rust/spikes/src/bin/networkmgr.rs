@@ -143,6 +143,12 @@ fn connect_plan(security: &str, saved_id: Option<String>) -> ConnectPlan {
     }
 }
 
+/// 一次刷新采集到的全部托盘数据。
+///
+/// 派生 `PartialEq` 是给 30 秒刷新用的：内容没变就不重建菜单，因为
+/// libdbusmenu 每次解析菜单都会给菜单项分配新的全局 id，而面板插件缓存
+/// 的是旧 id，重建后点击会报 “ID does not refer to a menu item”。
+#[derive(Clone, PartialEq)]
 struct Snapshot {
     state: TrayState,
     saved: Vec<SavedNetwork>,
@@ -1340,12 +1346,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "appindicator")]
     {
         let latest = Rc::new(RefCell::new(snapshot.state.clone()));
+        let last_snapshot = Rc::new(RefCell::new(snapshot.clone()));
         let refresh: Rc<dyn Fn()> = {
             let tray_refresh = Rc::clone(&tray);
             let actions_refresh = Arc::clone(&actions);
             let latest_refresh = Rc::clone(&latest);
+            let last_refresh = Rc::clone(&last_snapshot);
             Rc::new(move || {
                 let snapshot = gather();
+                // 状态没变就别碰菜单：libdbusmenu 每次解析菜单都分配新的
+                // 全局 id，面板插件缓存的旧 id 会失效，点击变成 no-op。
+                if *last_refresh.borrow() == snapshot {
+                    return;
+                }
+                *last_refresh.borrow_mut() = snapshot.clone();
                 let (menu, map) = build_menu(&snapshot);
                 *actions_refresh.lock().expect("actions lock") = map;
                 *latest_refresh.borrow_mut() = snapshot.state.clone();
