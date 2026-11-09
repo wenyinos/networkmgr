@@ -4,8 +4,9 @@
 并尽量保持原项目的外部契约：安装路径、sudoers、devd 事件、`rc.conf`、
 `wpa_supplicant.conf`、XDG 自启动与 gettext 翻译。
 
-> **0.1.0 预览版已发布**：GitHub Releases 提供 FreeBSD 15 的 amd64 / aarch64
-> `.pkg`（见 [Releases](https://github.com/wenyinos/networkmgr/releases)）。
+> **0.1.0 预览版已发布**：GitHub Releases 提供 FreeBSD 15 的 **amd64** `.pkg`
+> （见 [Releases](https://github.com/wenyinos/networkmgr/releases)；aarch64 在 arm64
+> runner 上构建超时，暂未发布，需要时用 `workflow_dispatch` 的 `arch=aarch64` 单独补）。
 > 包名 **`networkmgr-rust`**，可与官方 Python 版 `networkmgr` 同时安装；
 > 尚未进入 FreeBSD port。
 
@@ -34,7 +35,7 @@ gettext domain 是 `NetworkMgr-rust`。要接管 devd 事件时，把
 | [`rust/`](rust/) | 零依赖 `networkmgr-core`：**104 个契约测试**，覆盖配置校验、`wpa_cli` 输出解析、`ifconfig` / `netstat` / `sysrc` 解析、`rc.conf` / `resolv.conf` 安全写入、WireGuard、托盘状态聚合、MO 翻译目录、devd 事件处理、命令执行层；含 `dump-state`、`apply-config`、`networkmgr-devd` 三个二进制 |
 | [`rust/spikes/`](rust/spikes/) | 四个 GUI 程序（12 个测试）：eframe/glow 最小窗口、tray-icon 原生菜单托盘、配置窗口（COSMIC 风格，明暗双主题 + IPv4/IPv6 校验预览）、托盘主程序（动态子菜单、30 秒刷新、扫描连接与 Forget、gettext 菜单） |
 | [`.github/workflows/freebsd-rust.yml`](.github/workflows/freebsd-rust.yml) | 远端 FreeBSD 15.1 构建：core 测试 + 全部 GUI 程序，产出七个 FreeBSD 二进制 |
-| [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag 触发：FreeBSD 15.1 amd64 / aarch64 构建 `.pkg` 并直接创建 GitHub Release |
+| [`.github/workflows/release.yml`](.github/workflows/release.yml) | tag 或手动触发：构建 `.pkg` 并创建 GitHub Release；`arch` 可选 `both`/`amd64`/`aarch64`，aarch64 失败不再拖住 amd64 发布 |
 | [`rust/spikes/deploy-to-vm.sh`](rust/spikes/deploy-to-vm.sh) | 把 CI 产物拷进 `freebsd15` VM 实跑验收 |
 | [`docs/execution-report-2026-11-07.md`](docs/execution-report-2026-11-07.md) | 分轮实施记录：做了什么、验证到什么程度、哪些没做 |
 

@@ -7,7 +7,9 @@ Rust 重写后的首个预览版本，目标平台 **FreeBSD / GhostBSD / Dragon
 | 架构 | 文件 |
 |---|---|
 | FreeBSD 15 amd64 | `networkmgr-rust-0.1.0-amd64.pkg` |
-| FreeBSD 15 aarch64 | `networkmgr-rust-0.1.0-aarch64.pkg` |
+
+> aarch64 包暂未发布：在 `ubuntu-24.04-arm` 上跑 FreeBSD arm64 VM 实测超过 46 分钟仍未完成，
+> 已被 CI 取消。需要时用 `workflow_dispatch` 指定 `arch=aarch64` 单独补构建。
 
 ## 安装
 
@@ -27,7 +29,7 @@ sudo pkg delete -y networkmgr-rust
 ## 包含内容
 
 - `networkmgr-rust`：系统托盘（有线 / 无线 / WireGuard、扫描连接、PSK/WEP/EAP、
-  隐藏网络、Forget、Disconnect、3 次重试、300 ms 动画、7 种语言）
+  隐藏网络、Forget、Disconnect、3 次重试、300 ms 动画、6 种译文：de / nb_NO / pt_Br / ru / sv / zh_CN）
 - `networkmgr_configuration-rust`：COSMIC 风格配置窗口（以太网 / Wi-Fi / VPN 三页、
   IPv4/IPv6、DHCP/静态/SLAAC、Wi-Fi 凭据、证书选择器、`--apply` 写盘并重启接口）
 - `networkmgr-devd`：devd attach / link-up / link-down
