@@ -105,6 +105,8 @@ enum UiRequest {
     ConnectOutcome(ConnectOutcome),
     /// 要求主线程重建菜单与图标（扫描、断开、启用/禁用后）。
     Refresh,
+    /// 在工作线程里失败的事情，回主线程弹窗告诉用户。
+    Notice(String),
 }
 
 /// 一次连接尝试的结果；失败时带上足够的信息决定重试或清理。
@@ -477,9 +479,20 @@ fn dispatch(action: Action, tx: &mpsc::Sender<UiRequest>) {
             }
             let tx = tx.clone();
             thread::spawn(move || {
-                match networkmgr_core::config::fix_ctrl_interface_file("/etc/wpa_supplicant.conf") {
+                // 普通用户跑托盘时 /etc/wpa_supplicant.conf 是 root:wheel 0600，
+                // 连读都会 Permission denied，必须走提权通道而不是直接写文件。
+                let result = if is_root() {
+                    networkmgr_core::config::fix_ctrl_interface_file("/etc/wpa_supplicant.conf")
+                } else {
+                    run_privileged("/usr/local/bin/apply-config", &["--fix-wpa-ctrl"])
+                };
+                match result {
                     Ok(message) => println!("networkmgr: {message}"),
-                    Err(error) => eprintln!("networkmgr: {error}"),
+                    Err(error) => {
+                        eprintln!("networkmgr: {error}");
+                        let _ =
+                            tx.send(UiRequest::Notice(format!("修复控制接口失败：\n\n{error}")));
+                    }
                 }
                 let _ = tx.send(UiRequest::Refresh);
             });
@@ -1232,19 +1245,57 @@ fn prepare_session_environment() {
     std::process::exit(0);
 }
 
+/// 找桌面面板或窗口管理器的 pid，用来推断会话属主。
+///
+/// 只查 `xfce4-panel` 的话，在 Cinnamon / GNOME / MATE 上必然失败，
+/// 只能退到 `SUDO_USER` 或 `$USER`；没有 sudo 时连 XAUTHORITY 都设不上。
 fn find_panel() -> Option<String> {
-    let output = std::process::Command::new("pgrep")
-        .args(["-x", "xfce4-panel"])
-        .output()
-        .ok()?;
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .next()
-        .map(str::to_string)
+    const CANDIDATES: [&str; 10] = [
+        "cinnamon",
+        "gnome-shell",
+        "xfce4-panel",
+        "mate-panel",
+        "plasmashell",
+        "budgie-panel",
+        "lxpanel",
+        "lxsession",
+        "marco",
+        "muffin",
+    ];
+    for name in CANDIDATES {
+        let Ok(output) = std::process::Command::new("pgrep")
+            .args(["-x", name])
+            .output()
+        else {
+            continue;
+        };
+        if let Some(pid) = String::from_utf8_lossy(&output.stdout).lines().next() {
+            return Some(pid.to_string());
+        }
+    }
+    None
 }
 
-/// 找一条能注册 StatusNotifierItem 的 session bus。
+/// 找一条活着的 session bus。
+///
+/// 顺序：环境变量 → `~/.dbus/session-bus/` 记录 → `/tmp` 扫描。
+/// 前两步是桌面会话自己写下的地址，基本一击即中；只有都失败才扫 `/tmp`。
+///
+/// 两个曾经的坑：
+/// 1. 探测目标写成 `org.kde.StatusNotifierWatcher`，而 Cinnamon 根本不提供它，
+///    于是每条活着的 bus 都被判成不可达，最后拿不到地址；
+/// 2. `dbus-send` 默认回复超时 25 秒，几十个残留套接字累加就是半分钟以上的启动延迟。
 fn find_status_notifier_bus() -> Option<String> {
+    if let Ok(address) = std::env::var("DBUS_SESSION_BUS_ADDRESS") {
+        if !address.is_empty() && bus_alive(&address) {
+            return Some(address);
+        }
+    }
+    if let Some(address) = session_bus_from_state_file() {
+        if bus_alive(&address) {
+            return Some(address);
+        }
+    }
     let mut candidates: Vec<String> = std::fs::read_dir("/tmp")
         .ok()?
         .flatten()
@@ -1255,20 +1306,56 @@ fn find_status_notifier_bus() -> Option<String> {
         })
         .collect();
     candidates.sort();
-    candidates
-        .into_iter()
-        .find(|address| status_notifier_reachable(address))
+    candidates.into_iter().find(|address| bus_alive(address))
 }
 
-fn status_notifier_reachable(address: &str) -> bool {
+/// 从 `~/.dbus/session-bus/<machine-id>-<display>` 读桌面会话的 bus 地址。
+///
+/// root 启动时 `$HOME` 是 `/root`，读不到用户的会话文件，所以额外扫 `/home/*`。
+fn session_bus_from_state_file() -> Option<String> {
+    let mut dirs: Vec<String> = Vec::new();
+    if let Ok(home) = std::env::var("HOME") {
+        dirs.push(format!("{home}/.dbus/session-bus"));
+    }
+    if is_root() {
+        if let Ok(entries) = std::fs::read_dir("/home") {
+            for entry in entries.flatten() {
+                dirs.push(format!("{}/.dbus/session-bus", entry.path().display()));
+            }
+        }
+    }
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(content) = std::fs::read_to_string(entry.path()) else {
+                continue;
+            };
+            for line in content.lines() {
+                if let Some(rest) = line.strip_prefix("DBUS_SESSION_BUS_ADDRESS='") {
+                    if let Some(address) = rest.strip_suffix('\'') {
+                        return Some(address.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// bus 是否活着：只 Ping bus daemon 本身，不要求桌面实现 StatusNotifierWatcher。
+fn bus_alive(address: &str) -> bool {
     std::process::Command::new("dbus-send")
         .env("DBUS_SESSION_BUS_ADDRESS", address)
         .args([
             "--session",
-            "--dest=org.kde.StatusNotifierWatcher",
+            "--dest=org.freedesktop.DBus",
             "--type=method_call",
             "--print-reply",
-            "/StatusNotifierWatcher",
+            // 默认 25 秒太久，一个死套接字就能拖住启动。
+            "--reply-timeout=1000",
+            "/org/freedesktop/DBus",
             "org.freedesktop.DBus.Peer.Ping",
         ])
         .output()
@@ -1297,6 +1384,50 @@ fn is_root() -> bool {
         .unwrap_or(false)
 }
 
+/// 以提权方式执行一条命令，优先弹出桌面认证框。
+///
+/// 顺序：`sudo -n`（sudoers 已授权的免密条目，不打扰用户）→ `pkexec`
+/// （polkit 认证对话框，Cinnamon / GNOME / XFCE / KDE 都自带 agent）。
+///
+/// **不自己实现密码框**：口令不该经过本进程，也不该由我们保管。
+/// `pkexec` 被取消时返回非零且 stderr 可能为空，此时给出可直接复制的命令。
+fn run_privileged(program: &str, args: &[&str]) -> Result<String, String> {
+    if let Ok(output) = std::process::Command::new("sudo")
+        .arg("-n")
+        .arg(program)
+        .args(args)
+        .output()
+    {
+        if output.status.success() {
+            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+        }
+    }
+
+    match std::process::Command::new("pkexec")
+        .arg(program)
+        .args(args)
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            if !stderr.is_empty() {
+                return Err(stderr);
+            }
+        }
+        Err(error) => {
+            debug_log(&format!("pkexec unavailable: {error}"));
+        }
+    }
+
+    Err(format!(
+        "需要管理员权限。请在终端手动执行：\nsudo {program} {}",
+        args.join(" ")
+    ))
+}
+
 fn relaunch_as(user: &str, display: &str, xauthority: Option<&str>, bus: Option<&str>) {
     let exe = std::env::current_exe().unwrap_or_default();
     let mut command = format!("env DISPLAY={display}");
@@ -1313,13 +1444,48 @@ fn relaunch_as(user: &str, display: &str, xauthority: Option<&str>, bus: Option<
         command.push_str(&arg);
     }
     debug_log(&format!("relaunching as {user}: {command}"));
-    let _ = std::process::Command::new("su")
+    // 必须 spawn 后立刻返回：`.status()` 会等托盘退出，root 父进程就一直挂着
+    // （桌面入口 `Exec=sudo networkmgr-rust` 时最明显，进程列表里多一个常驻 root）。
+    match std::process::Command::new("su")
         .args(["-m", user, "-c", &command])
-        .status();
+        .spawn()
+    {
+        Ok(_) => {}
+        Err(error) => eprintln!("networkmgr: 无法以 {user} 身份重启：{error}"),
+    }
+}
+
+/// 启动前确认托盘运行库在。
+///
+/// `libappindicator-sys` 在 `Lazy` 初始化里直接 `panic!`，既抓不住也转不成
+/// `Result`，用户只会看到 backtrace 和退出码 101。这里先查文件，缺了就给一条
+/// 能照着做的提示再退出。
+#[cfg(feature = "appindicator")]
+fn ensure_tray_library() {
+    const CANDIDATES: [&str; 4] = [
+        "/usr/local/lib/libayatana-appindicator3.so.1",
+        "/usr/local/lib/libayatana-appindicator3.so",
+        "/usr/local/lib/libappindicator3.so.1",
+        "/usr/local/lib/libappindicator3.so",
+    ];
+    if CANDIDATES
+        .iter()
+        .any(|path| std::path::Path::new(path).exists())
+    {
+        return;
+    }
+    eprintln!(
+        "networkmgr: 缺少托盘运行库 libayatana-appindicator。\n\
+         networkmgr: missing libayatana-appindicator, the tray cannot start.\n\
+         networkmgr: 请执行 / please run: sudo pkg install -y libayatana-appindicator"
+    );
+    std::process::exit(1);
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     networkmgr_core::i18n::init();
+    #[cfg(feature = "appindicator")]
+    ensure_tray_library();
     prepare_session_environment();
     #[cfg(feature = "appindicator")]
     gtk::init()?;
@@ -1483,6 +1649,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         handle_connect_outcome(outcome, &tx_channel, refresh_channel.as_ref());
                     }
                     UiRequest::Refresh => refresh_channel(),
+                    UiRequest::Notice(text) => {
+                        show_message(&networkmgr_core::tr!("NetworkMgr"), &text);
+                    }
                 }
             }
             gtk::glib::ControlFlow::Continue

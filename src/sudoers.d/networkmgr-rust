@@ -1,1 +1,2 @@
 %wheel ALL=(ALL) NOPASSWD: /usr/local/bin/networkmgr-rust
+%wheel ALL=(ALL) NOPASSWD: /usr/local/bin/apply-config --fix-wpa-ctrl

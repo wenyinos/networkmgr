@@ -101,6 +101,12 @@ comment: "Network manager for FreeBSD desktops (Rust rewrite)"
 maintainer: "wenyinos@users.noreply.github.com"
 www: "https://github.com/wenyinos/networkmgr"
 prefix: "/usr/local"
+# libayatana-appindicator 是 tray-icon 用 dlopen 加载的，不在 ELF 的 NEEDED 里，
+# 所以 pkg 的自动依赖扫描发现不了；不写在这里，干净系统上装完就会 panic 退出。
+deps: {
+    gtk3: {origin: "x11-toolkits/gtk30"},
+    "libayatana-appindicator": {origin: "x11-toolkits/libayatana-appindicator"}
+}
 desc: <<EOD
 NetworkMgr is a graphical network manager for FreeBSD, GhostBSD and
 DragonFlyBSD desktops. This is the Rust rewrite. It installs alongside
