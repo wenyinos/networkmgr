@@ -1355,9 +1355,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         use gtk::glib::translate::FromGlibPtrNone;
         use gtk::glib::ObjectExt;
         let indicator = unsafe { tray.borrow().app_indicator() };
-        let object: gtk::glib::Object = unsafe {
-            gtk::glib::Object::from_glib_none(indicator as *mut gtk::glib::gobject_ffi::GObject)
-        };
+        // app_indicator() 返回的是 Rust 包装结构体，第一个字段才是 GObject 指针。
+        let raw: *mut gtk::glib::gobject_ffi::GObject =
+            unsafe { *(indicator as *const *mut gtk::glib::gobject_ffi::GObject) };
+        let object: gtk::glib::Object = unsafe { gtk::glib::Object::from_glib_none(raw) };
         object.connect_local("activate", false, |_| {
             TRAY_ACTIVATED.store(true, Ordering::Relaxed);
             None
