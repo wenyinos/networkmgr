@@ -1246,3 +1246,37 @@ VM 换成 MATE 桌面后，zemin 以普通用户运行 `networkmgr-rust` 报
 - **两处 `Cargo.lock` 手动改版本号**（`rust/Cargo.lock` 1 处、`rust/spikes/Cargo.lock` 2 处），
   因为本地不再编译；上次 0.2.1 首次发布就是栽在 lock 没同步、`--locked` 拒绝构建。
 - `spikes/Cargo.lock` 里另有 4 个 `0.2.1` 属于第三方 crate，按行号精确修改，没有误伤。
+
+---
+
+## 45. 0.2.3：托盘改为普通用户运行（2026-11-10）
+
+用户提出：「为什么一定要 sudo 启动？把 wpa socket 的组权限放开给 wheel 不行吗？」
+
+**成立，且有官方依据**：`man wpa_supplicant.conf` 对 `ctrl_interface_group` 写的是
+「allow non-root users to access the control interface files」，示例正是 `wheel`。
+
+### 改动
+
+- `src/wpa_supplicant.conf`：`ctrl_interface_group=operator` → `wheel`。这一条是关键——
+  开发 VM 的 zemin 在 `wheel`、不在 `operator`，所以模板里的 `operator` 从来没生效过。
+- `config.rs`：新增 `WPA_CTRL_GROUP_LINE`、`has_ctrl_interface_group()`；
+  `ensure_ctrl_interface()` 从「只补 ctrl_interface」改为「缺哪行补哪行」——
+  只补前者时 socket 属组仍是 root，普通用户照样连不上。
+- `src/networkmgr-rust.desktop`：`Exec=sudo networkmgr-rust` → `Exec=networkmgr-rust`。
+- `src/sudoers.d/networkmgr-rust`：删掉整块二进制免密，只留
+  `apply-config --fix-wpa-ctrl` 一条兜底。
+- `run_privileged()`：**pkexec 提到 sudo 之前**。FreeBSD 的 sudo 带 `--with-tty-tickets`，
+  自启动这类无终端场景下 NOPASSWD 也不生效；polkit agent 没有这个限制。
+
+### 覆盖范围
+
+| 操作 | 通道 |
+|---|---|
+| 读状态 / 扫描 / 连接 / 断开 / Forget | `wpa_cli` → 控制 socket（wheel 组可读写） |
+| 保存网络、写 `rc.conf`/`resolv.conf`、`ifconfig` | pkexec 认证框（sudo -n 兜底） |
+
+### 升级注意
+
+老机器要跑一次 `apply-config --fix-wpa-ctrl` 补上 `ctrl_interface_group=wheel`，
+再 `service wpa_supplicant restart`；否则 socket 仍归 root，普通用户读不了。
