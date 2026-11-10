@@ -1411,12 +1411,21 @@ fn fix_tray_runtime_dir() {
         if metadata.uid() == uid {
             return;
         }
+        let stale = format!(
+            "stale {} owned by uid {} (current uid {uid})",
+            dir.display(),
+            metadata.uid()
+        );
         if std::fs::remove_dir_all(&dir).is_ok() {
-            debug_log(&format!(
-                "removed stale {} owned by uid {} (current uid {uid})",
-                dir.display(),
-                metadata.uid()
-            ));
+            debug_log(&format!("removed {stale}"));
+            return;
+        }
+        // 目录里若是 root 属主的文件，普通用户删不掉——删除文件需要对**该目录**
+        // 本身有写权限。但父目录（XDG_RUNTIME_DIR）属于自己，重命名只需要父目录的
+        // 写权限，把旧的挪到一边让 tray-icon 重建即可。
+        let quarantine = dir.with_extension(format!("stale-{}", std::process::id()));
+        if std::fs::rename(&dir, &quarantine).is_ok() {
+            debug_log(&format!("quarantined {stale} as {}", quarantine.display()));
         }
     }
 }
