@@ -4,23 +4,23 @@
 并尽量保持原项目的外部契约：安装路径、sudoers、devd 事件、`rc.conf`、
 `wpa_supplicant.conf`、XDG 自启动与 gettext 翻译。
 
-> **0.2.1 预览版已发布**：GitHub Releases 提供 FreeBSD 15 的 **amd64** `.pkg`
+> **0.2.2 预览版已发布**：GitHub Releases 提供 FreeBSD 15 的 **amd64** `.pkg`
 > （见 [Releases](https://github.com/wenyinos/networkmgr/releases)；aarch64 在 arm64
 > runner 上构建超时，暂未发布，需要时用 `workflow_dispatch` 的 `arch=aarch64` 单独补）。
 > 包名 **`networkmgr-rust`**，可与官方 Python 版 `networkmgr` 同时安装；
 > 尚未进入 FreeBSD port。
 
-## 安装（0.2.1）
+## 安装（0.2.2）
 
 ```sh
-sudo pkg add ./networkmgr-rust-0.2.1-amd64.pkg
+sudo pkg add ./networkmgr-rust-0.2.2-amd64.pkg
 # 或
-sudo pkg install -y ./networkmgr-rust-0.2.1-amd64.pkg
+sudo pkg install -y ./networkmgr-rust-0.2.2-amd64.pkg
 ```
 
 安装后从应用菜单启动「NetworkMgr (Rust)」，或运行 `sudo networkmgr-rust`。
 卸载用 `sudo pkg delete -y networkmgr-rust`。发布说明见
-[`docs/RELEASE-0.2.1.md`](docs/RELEASE-0.2.1.md)。
+[`docs/RELEASE-0.2.2.md`](docs/RELEASE-0.2.2.md)。
 
 与 Python 版共存：二进制是 `networkmgr-rust` / `networkmgr_configuration-rust`，
 desktop 放在 `share/applications`（不写 autostart），sudoers 与 devd 规则用独立文件，
@@ -119,7 +119,7 @@ VM 绿灯不等于验收完成；阶段 3 结束必须同时有 B 与 C 的记�
 - **0.1.0 的 pkg 缺 `libayatana-appindicator` 运行依赖**（干净系统上启动即 panic，退出码 101），
   **0.2.0 起已修复**：`+MANIFEST` 显式声明依赖，程序启动前也会自检并给出可照做的提示。
 - **用 root 跑过托盘后，普通用户可能起不来**（`Error: OsError(code 13)`）：
-  root 会在 `$XDG_RUNTIME_DIR/tray-icon` 留下自己属主的缓存目录。**0.2.1 起**启动时
+  root 会在 `$XDG_RUNTIME_DIR/tray-icon` 留下自己属主的缓存目录。**0.2.2 起**启动时
   会自动检查并清理；在此之前的手工办法是 `rm -rf "$XDG_RUNTIME_DIR/tray-icon"`。
   同版修复的还有 30–75 秒启动延迟、只认 Xfce 面板、root 父进程常驻，详见方案第 41 节。
 - **阶段 0 / 1 已完成，阶段 2 主体完成，阶段 3 主体完成**：逻辑层全部移植并在 FreeBSD 上跑通 104 个测试，

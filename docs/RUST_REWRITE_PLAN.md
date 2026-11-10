@@ -1217,3 +1217,32 @@ VM 换成 MATE 桌面后，zemin 以普通用户运行 `networkmgr-rust` 报
 ### 发布
 
 - 版本 0.2.0 → 0.2.1；新增 `docs/RELEASE-0.2.1.md`；仍只发 amd64。
+
+---
+
+## 44. 0.2.2：托盘运行时目录修复补全（2026-11-10）
+
+0.2.1 的 `fix_tray_runtime_dir()` **实测不生效**，本版补全。
+
+### 为什么 0.2.1 不行
+
+- 它用 `std::fs::remove_dir_all` 删 `$XDG_RUNTIME_DIR/tray-icon`。
+- 删除目录里的文件需要对**该目录本身**有写权限；root 留下的是 `0755`，
+  普通用户只有 `r-x`，于是 `remove_dir_all` 直接失败。
+- 代码写的是 `if std::fs::remove_dir_all(&dir).is_ok() { ... }`，失败就静默跳过，
+  等于什么都没做——**这也是"改完还要手动 mv 才能跑"的原因**。
+
+### 0.2.2 的做法
+
+- `remove_dir_all` 失败时改用 `rename`，把目录改名成 `tray-icon.stale-<pid>`。
+  重命名只需要**父目录**（`$XDG_RUNTIME_DIR`，属于当前用户）的写权限，
+  所以一定能成功；旧目录挪开后 tray-icon 会重建自己的缓存。
+- 验证过等价操作：VM 上以 zemin `mv /var/run/xdg/zemin/tray-icon ...` 返回 0，
+  再启动即 `tray ready`，目录重建为 `zemin:zemin`。
+
+### 版本与构建
+
+- 版本 0.2.1 → 0.2.2；新增 `docs/RELEASE-0.2.2.md`；仍只发 amd64。
+- **两处 `Cargo.lock` 手动改版本号**（`rust/Cargo.lock` 1 处、`rust/spikes/Cargo.lock` 2 处），
+  因为本地不再编译；上次 0.2.1 首次发布就是栽在 lock 没同步、`--locked` 拒绝构建。
+- `spikes/Cargo.lock` 里另有 4 个 `0.2.1` 属于第三方 crate，按行号精确修改，没有误伤。

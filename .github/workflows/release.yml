@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 env:
-  VERSION: 0.2.1
+  VERSION: 0.2.2
   PKG_NAME: networkmgr
 
 jobs:
@@ -40,7 +40,7 @@ jobs:
               mesa-dri fontconfig wqy-fonts gettext-tools
           run: |
             set -eu
-            VERSION="${VERSION:-0.2.1}"
+            VERSION="${VERSION:-0.2.2}"
             REPO_ROOT=$(pwd)
             cd rust
             CARGO_TARGET_DIR=/tmp/nm-core cargo build --release --locked \
@@ -89,7 +89,7 @@ jobs:
               mesa-dri fontconfig wqy-fonts gettext-tools
           run: |
             set -eu
-            VERSION="${VERSION:-0.2.1}"
+            VERSION="${VERSION:-0.2.2}"
             REPO_ROOT=$(pwd)
             cd rust
             CARGO_TARGET_DIR=/tmp/nm-core cargo build --release --locked \
