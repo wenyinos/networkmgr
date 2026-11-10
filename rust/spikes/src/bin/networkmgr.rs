@@ -1376,12 +1376,49 @@ fn process_owner(pid: &str) -> Option<String> {
     }
 }
 
+/// 当前进程的 uid；拿不到时返回 None。
+fn current_uid() -> Option<u32> {
+    let output = std::process::Command::new("id").arg("-u").output().ok()?;
+    String::from_utf8_lossy(&output.stdout).trim().parse().ok()
+}
+
 fn is_root() -> bool {
-    std::process::Command::new("id")
-        .arg("-u")
-        .output()
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim() == "0")
-        .unwrap_or(false)
+    current_uid() == Some(0)
+}
+
+/// 清掉不是当前用户的 `$XDG_RUNTIME_DIR/tray-icon`。
+///
+/// 用 root 跑过一次托盘后，tray-icon 会在运行时目录里留下 root 属主的缓存；
+/// 之后普通用户启动写不进去，tray-icon 只抛一个误导性的 `OsError(code 13)`
+/// ——它的 `last_os_error()` 拿的是残留 errno，指向不了真凶。
+/// 目录里只有缓存，删掉重建的代价为零。
+#[cfg(feature = "appindicator")]
+fn fix_tray_runtime_dir() {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") else {
+            return;
+        };
+        let dir = std::path::Path::new(&runtime).join("tray-icon");
+        let Ok(metadata) = std::fs::metadata(&dir) else {
+            return;
+        };
+        let Some(uid) = current_uid() else {
+            return;
+        };
+        if metadata.uid() == uid {
+            return;
+        }
+        if std::fs::remove_dir_all(&dir).is_ok() {
+            debug_log(&format!(
+                "removed stale {} owned by uid {} (current uid {uid})",
+                dir.display(),
+                metadata.uid()
+            ));
+        }
+    }
 }
 
 /// 以提权方式执行一条命令，优先弹出桌面认证框。
@@ -1488,6 +1525,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ensure_tray_library();
     prepare_session_environment();
     #[cfg(feature = "appindicator")]
+    fix_tray_runtime_dir();
+    #[cfg(feature = "appindicator")]
     gtk::init()?;
 
     let snapshot = gather();
@@ -1502,17 +1541,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Rc::new(RefCell::new(Some(menu.gtk_context_menu())))
     };
 
+    let tray_icon = match TrayIconBuilder::new()
+        .with_tooltip(snapshot.state.tooltip.clone())
+        .with_icon(icon_for(
+            snapshot.state.signal,
+            snapshot.state.kind == Some("wifi"),
+        ))
+        .with_menu(Box::new(menu))
+        .build()
+    {
+        Ok(tray) => tray,
+        Err(error) => {
+            // tray-icon 的 OsError 往往只是 `last_os_error()` 的残留值，
+            // 光看错误码定位不到真正原因，这里补一条可执行的排查方向。
+            eprintln!("networkmgr: 无法创建托盘图标：{error}");
+            eprintln!("networkmgr: 若包含 PermissionDenied，多半是运行时目录属主不对：");
+            eprintln!("networkmgr:   rm -rf \"$XDG_RUNTIME_DIR/tray-icon\"");
+            std::process::exit(1);
+        }
+    };
+
     #[cfg_attr(not(feature = "appindicator"), allow(unused_variables))]
-    let tray = Rc::new(RefCell::new(
-        TrayIconBuilder::new()
-            .with_tooltip(snapshot.state.tooltip.clone())
-            .with_icon(icon_for(
-                snapshot.state.signal,
-                snapshot.state.kind == Some("wifi"),
-            ))
-            .with_menu(Box::new(menu))
-            .build()?,
-    ));
+    let tray = Rc::new(RefCell::new(tray_icon));
 
     // 连接 libayatana 的 activate 信号，让左键点击返回成功并弹出菜单；
     // 不连的话面板收到 `No handler for Activate` 后什么都不会显示。
