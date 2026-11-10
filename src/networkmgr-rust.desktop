@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=NetworkMgr (Rust)
 Comment=Network Manager
-Exec=sudo networkmgr-rust
+Exec=networkmgr-rust
 Terminal=false
 Type=Application
 Icon=networkmgr-rust

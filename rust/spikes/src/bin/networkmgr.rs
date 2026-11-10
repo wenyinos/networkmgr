@@ -1438,17 +1438,9 @@ fn fix_tray_runtime_dir() {
 /// **不自己实现密码框**：口令不该经过本进程，也不该由我们保管。
 /// `pkexec` 被取消时返回非零且 stderr 可能为空，此时给出可直接复制的命令。
 fn run_privileged(program: &str, args: &[&str]) -> Result<String, String> {
-    if let Ok(output) = std::process::Command::new("sudo")
-        .arg("-n")
-        .arg(program)
-        .args(args)
-        .output()
-    {
-        if output.status.success() {
-            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
-        }
-    }
-
+    // pkexec 优先：polkit 有自己的 agent，不依赖 tty。FreeBSD 的 sudo 带
+    // `--with-tty-tickets`，在自启动这类无终端场景里即使配了 NOPASSWD 也会
+    // 转去要密码，所以不能把它当主路径。
     match std::process::Command::new("pkexec")
         .arg(program)
         .args(args)
@@ -1458,13 +1450,25 @@ fn run_privileged(program: &str, args: &[&str]) -> Result<String, String> {
             return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
         }
         Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            if !stderr.is_empty() {
-                return Err(stderr);
-            }
+            debug_log(&format!(
+                "pkexec {program} failed with {:?}",
+                output.status.code()
+            ));
         }
         Err(error) => {
             debug_log(&format!("pkexec unavailable: {error}"));
+        }
+    }
+
+    // 退一步试免密 sudo：终端里启动时通常可用，比要求用户手动执行体验好。
+    if let Ok(output) = std::process::Command::new("sudo")
+        .arg("-n")
+        .arg(program)
+        .args(args)
+        .output()
+    {
+        if output.status.success() {
+            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
         }
     }
 

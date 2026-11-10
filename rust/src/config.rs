@@ -214,6 +214,12 @@ pub type NetworkField = (&'static str, String);
 
 /// wpa_supplicant 全局控制接口，与安装模板使用同一路径。
 pub const WPA_CTRL_LINE: &str = "ctrl_interface=/var/run/wpa_supplicant";
+/// 控制 socket 的属组。
+///
+/// 没有这一行时 socket 归 `root:wheel` 且权限 660，只有 root 能连 `wpa_cli`，
+/// 托盘就**必须**以 root 运行。用 `wheel` 而不是 `operator`：桌面用户的 wheel
+/// 成员资格是安装前提，`operator` 则不一定。
+pub const WPA_CTRL_GROUP_LINE: &str = "ctrl_interface_group=wheel";
 
 /// 内容里是否已有有效的 `ctrl_interface`（忽略注释行）。
 ///
@@ -228,15 +234,36 @@ pub fn has_ctrl_interface(text: &str) -> bool {
     })
 }
 
-/// 缺 `ctrl_interface` 时返回补好文件头的新内容；已有则返回 `None`。
+/// 内容里是否已有有效的 `ctrl_interface_group`（忽略注释行）。
+pub fn has_ctrl_interface_group(text: &str) -> bool {
+    text.lines().any(|line| {
+        let trimmed = line.trim();
+        !trimmed.starts_with('#')
+            && trimmed
+                .split_once('=')
+                .is_some_and(|(key, _)| key.trim() == "ctrl_interface_group")
+    })
+}
+
+/// 缺哪行补哪行，返回补好文件头的新内容；两行都在则返回 `None`。
 ///
-/// 老机器上的 `/etc/wpa_supplicant.conf` 往往只有 `network={...}`，
-/// 没有这一行时 `wpa_cli` 连不上 daemon，整个无线功能都会静默失效。
+/// 老机器上的 `/etc/wpa_supplicant.conf` 往往只有 `network={...}`。
+/// 只补 `ctrl_interface` 是不够的：socket 属组仍是 root、权限 660，
+/// 普通用户照样连不上 `wpa_cli`，托盘就只能靠 root 跑。
 pub fn ensure_ctrl_interface(text: &str) -> Option<String> {
-    if has_ctrl_interface(text) {
+    let mut header = String::new();
+    if !has_ctrl_interface(text) {
+        header.push_str(WPA_CTRL_LINE);
+        header.push('\n');
+    }
+    if !has_ctrl_interface_group(text) {
+        header.push_str(WPA_CTRL_GROUP_LINE);
+        header.push('\n');
+    }
+    if header.is_empty() {
         None
     } else {
-        Some(format!("{WPA_CTRL_LINE}\n{text}"))
+        Some(format!("{header}{text}"))
     }
 }
 
@@ -380,15 +407,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ctrl_interface_is_added_only_when_missing() {
+    fn ctrl_interface_and_group_are_added_when_missing() {
         let missing = "network={\n}\n";
-        let fixed = ensure_ctrl_interface(missing).expect("should add ctrl_interface");
-        assert_eq!(fixed, format!("{WPA_CTRL_LINE}\n{missing}"));
+        let fixed = ensure_ctrl_interface(missing).expect("should add both lines");
+        assert_eq!(
+            fixed,
+            format!("{WPA_CTRL_LINE}\n{WPA_CTRL_GROUP_LINE}\n{missing}")
+        );
         assert!(ensure_ctrl_interface(&fixed).is_none());
+
+        // 只有 ctrl_interface 时补 group：否则 socket 仍归 root，普通用户连不上。
+        let only_ctrl = format!("{WPA_CTRL_LINE}\nnetwork={{\n}}\n");
+        let fixed = ensure_ctrl_interface(&only_ctrl).expect("should add group");
+        assert!(fixed.starts_with(WPA_CTRL_GROUP_LINE));
+        assert!(ensure_ctrl_interface(&fixed).is_none());
+
+        // 只有 group 时补 ctrl_interface。
+        let only_group = "ctrl_interface_group=operator\nnetwork={\n}\n";
+        let fixed = ensure_ctrl_interface(only_group).expect("should add ctrl_interface");
+        assert!(fixed.starts_with(WPA_CTRL_LINE));
+
+        // 注释掉的行不算已有配置。
         let commented = "# ctrl_interface=/old\nnetwork={\n}\n";
         assert!(ensure_ctrl_interface(commented).is_some());
-        let group = "ctrl_interface_group=operator\nnetwork={\n}\n";
-        assert!(ensure_ctrl_interface(group).is_some());
+    }
+
+    #[test]
+    fn ctrl_interface_group_line_uses_wheel() {
+        assert_eq!(WPA_CTRL_GROUP_LINE, "ctrl_interface_group=wheel");
     }
 
     #[test]

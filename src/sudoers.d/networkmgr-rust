@@ -1,2 +1,5 @@
-%wheel ALL=(ALL) NOPASSWD: /usr/local/bin/networkmgr-rust
+# 托盘默认以普通用户运行，不再需要整块二进制的免密：
+# `ctrl_interface_group=wheel` 让 wpa 控制 socket 对 wheel 组可读写，
+# 写配置等特权操作走 pkexec（桌面认证框）。
+# 这一条只是终端里 `sudo -n` 的快捷路径，pkexec 不可用时兜底。
 %wheel ALL=(ALL) NOPASSWD: /usr/local/bin/apply-config --fix-wpa-ctrl
