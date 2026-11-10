@@ -1182,3 +1182,38 @@ P1 风险（第 9 节）：老机器的 `/etc/wpa_supplicant.conf` 只有 `netwo
 - 触发方式用 `workflow_dispatch -f arch=amd64`，不走 tag——tag 触发会连 aarch64 一起跑。
 - 0.1.0 的 aarch64 构建（run `42574595069`，已跑 42 分钟）已取消，不再补发。
 - `docs/RELEASE-0.1.0.md` 保留作为历史记录。
+
+---
+
+## 43. 0.2.1：托盘运行时目录属主修复（2026-11-10）
+
+VM 换成 MATE 桌面后，zemin 以普通用户运行 `networkmgr-rust` 报
+`Error: OsError(Os { code: 13, kind: PermissionDenied, message: "拒绝访问" })` 并退出。
+
+### 根因
+
+- tray-icon 会在 `$XDG_RUNTIME_DIR/tray-icon/` 下建缓存目录。
+- `/var/run/xdg/zemin` 是 lightdm 为会话创建的运行时目录；**11-09 用 root 验收时**
+  留下了 `tray-icon/`（`root:zemin`、0755），普通用户对它只有 `r-x`。
+- 重启后 zemin 自动登录 MATE，从终端启动时写缓存 → `EACCES`。
+- **错误码为什么误导**：tray-icon 用 `io::Error::last_os_error()`，拿到的是**上一次**操作
+  残留的 errno；`truss` 里看不到对应的失败系统调用，只能看到进程 `_exit(1)`。
+  这也是"重启后才坏"的原因——之前所有验收都是 root/daemon 跑的，自己写自己的目录。
+
+### 修复
+
+- 新增 `fix_tray_runtime_dir()`：启动时比对 `$XDG_RUNTIME_DIR/tray-icon` 的 uid，
+  不是当前用户就删掉（目录里只有缓存，重建代价为零）。
+- `TrayIconBuilder::build()` 的失败改用 `match`，打印可执行的排查提示
+  （`rm -rf "$XDG_RUNTIME_DIR/tray-icon"`），不再只丢一个 `code: 13`。
+- `is_root()` 改为复用新加的 `current_uid()`。
+
+### 验证
+
+- 复现：带 `XDG_RUNTIME_DIR` 启动 → EACCES；去掉即 `tray ready`。
+- 修复后以 zemin + 真实会话环境启动 → `tray ready`，目录重建为 `zemin:zemin`。
+- `cargo test --no-default-features --features sni`：GUI **12 passed**，`cargo fmt --check` 干净。
+
+### 发布
+
+- 版本 0.2.0 → 0.2.1；新增 `docs/RELEASE-0.2.1.md`；仍只发 amd64。
